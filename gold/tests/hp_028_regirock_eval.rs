@@ -97,7 +97,7 @@ mod eval_tests {
     // ========================================================================
 
     #[test] fn eval_is_clear_body_active_sig() { let _: fn(&tcg_core::GameState, tcg_core::CardInstanceId) -> bool = is_clear_body_active; }
-    #[test] fn eval_execute_rock_slide_bench_sig() { let _: fn(&mut tcg_core::GameState, Vec<tcg_core::CardInstanceId>) = execute_rock_slide_bench; }
+    #[test] fn eval_execute_rock_slide_bench_sig() { let _: fn(&mut tcg_core::GameState, tcg_core::CardInstanceId) = execute_rock_slide_bench; }
 
     // ========================================================================
     // Behavioral Tests

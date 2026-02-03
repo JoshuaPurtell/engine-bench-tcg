@@ -68,8 +68,8 @@ pub fn on_attach_as_energy(game: &mut GameState, card_id: CardInstanceId, target
     let attached_energy: Vec<CardInstanceId> = game
         .get_attached_energy(target_id)
         .iter()
-        .filter(|&&id| id != card_id) // Exclude the Castform we just attached
-        .copied()
+        .filter(|c| c.id != card_id) // Exclude the Castform we just attached
+        .map(|c| c.id)
         .collect();
 
     if attached_energy.is_empty() {

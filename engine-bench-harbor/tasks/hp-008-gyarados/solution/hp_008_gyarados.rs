@@ -101,7 +101,7 @@ pub fn execute_hyper_beam_effect(game: &mut GameState, attacker_id: CardInstance
                         player: opp_player,
                         target_id: defender_id,
                         count: 1,
-                        options: attached.to_vec(),
+                        options: attached.iter().map(|c| c.id).collect(),
                         destination: "discard".to_string(),
                     };
                     game.set_pending_prompt(prompt, opp_player);

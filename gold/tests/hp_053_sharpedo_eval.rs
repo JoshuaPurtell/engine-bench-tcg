@@ -106,7 +106,7 @@ mod eval_tests {
     #[test]
     fn eval_has_holon_energy_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = has_holon_energy(&game, attacker_id);
         assert!(!result, "has_holon_energy should return false with basic game state");
     }

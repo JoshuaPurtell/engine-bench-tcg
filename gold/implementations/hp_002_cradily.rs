@@ -16,7 +16,8 @@ pub fn register_harsh_fluid_effect(game: &mut GameState, target_id: CardInstance
 }
 
 /// Execute Poison Tentacles poison effect.
-pub fn execute_poison_tentacles(game: &mut GameState, attacker_id: CardInstanceId) {
+pub fn execute_poison_tentacles(game: &mut GameState) {
+    let attacker_id = game.players[0].active.as_ref().unwrap().card.id;
     let opp_idx = get_opponent_idx(game, attacker_id);
     if let Some(defender) = &mut game.players[opp_idx].active {
         defender.apply_special_condition(SpecialCondition::Poisoned);

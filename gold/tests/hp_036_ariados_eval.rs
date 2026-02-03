@@ -141,13 +141,13 @@ mod eval_tests {
 
     #[test]
     fn eval_is_reactive_poison_active_does_not_panic() {
-        let (game, ariados_id) = create_test_game();
+        let (mut game, ariados_id) = create_test_game();
         let _result = is_reactive_poison_active(&game, ariados_id);
     }
 
     #[test]
     fn eval_is_reactive_poison_active_returns_bool() {
-        let (game, ariados_id) = create_test_game();
+        let (mut game, ariados_id) = create_test_game();
         let result: bool = is_reactive_poison_active(&game, ariados_id);
         let _ = result;
     }

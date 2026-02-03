@@ -19,7 +19,11 @@ pub fn execute_spiral_growth(game: &mut GameState, attacker_id: CardInstanceId, 
     // Attach heads_count basic energy from discard
     let mut attached = 0;
     while attached < heads_count {
-        if let Some(energy) = game.players[player_idx].discard.find_basic_energy() {
+        let energy_id = game.players[player_idx].discard.cards().iter()
+            .find(|c| game.card_meta.get(&c.def_id).map_or(false, |m| m.is_energy && m.energy_kind.as_deref() == Some("Basic")))
+            .map(|c| c.id);
+        if let Some(id) = energy_id {
+            let energy = game.players[player_idx].discard.remove(id).unwrap();
             if let Some(active) = &mut game.players[player_idx].active {
                 if active.card.id == attacker_id {
                     active.attached_energy.push(energy);

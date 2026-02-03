@@ -462,7 +462,7 @@ mod behavioral_tests {
 
     #[test]
     fn eval_dragon_pump_damage_with_discard() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(dragon_pump_damage(&game, attacker_id, true), 70);
     }
 

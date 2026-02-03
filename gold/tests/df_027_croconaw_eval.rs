@@ -430,13 +430,13 @@ mod behavioral_tests {
     
     #[test]
     fn eval_bite_damage_value() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(bite_damage(&game, attacker_id), 30);
     }
 
     #[test]
     fn eval_aqua_sonic_damage_value() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(aqua_sonic_damage(&game, attacker_id), 50);
     }
 

@@ -49,12 +49,7 @@ pub fn has_supporter_in_play(game: &GameState, player: PlayerId) -> bool {
         PlayerId::P2 => 1,
     };
 
-    // Check if there's a Supporter in the "in play" zone
-    // This depends on how the engine tracks played Supporters
-    game.players[player_idx]
-        .supporter_in_play
-        .as_ref()
-        .is_some()
+    game.players[player_idx].played_supporter_this_turn
 }
 
 // ============================================================================

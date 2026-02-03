@@ -159,7 +159,7 @@ mod eval_tests {
 
     #[test]
     fn eval_get_zzzap_targets_returns_vec() {
-        let (game, _) = create_test_game_basic();
+        let (mut game, _) = create_test_game_basic();
         let targets = get_zzzap_targets(&game);
         // Function should return a Vec (may be empty in basic game)
         let _ = targets.len();
@@ -167,7 +167,7 @@ mod eval_tests {
 
     #[test]
     fn eval_get_zzzap_targets_basic_game_no_crash() {
-        let (game, _) = create_test_game_basic();
+        let (mut game, _) = create_test_game_basic();
         // Should not panic with basic game state
         let _targets = get_zzzap_targets(&game);
     }
@@ -178,21 +178,21 @@ mod eval_tests {
 
     #[test]
     fn eval_metallic_thunder_damage_base_50() {
-        let (game, _) = create_test_game_basic();
+        let (mut game, _) = create_test_game_basic();
         let damage = metallic_thunder_damage(&game, false);
         assert_eq!(damage, 50, "Metallic Thunder base damage should be 50, got {}", damage);
     }
 
     #[test]
     fn eval_metallic_thunder_damage_100_with_discard() {
-        let (game, _) = create_test_game_basic();
+        let (mut game, _) = create_test_game_basic();
         let damage = metallic_thunder_damage(&game, true);
         assert_eq!(damage, 100, "Metallic Thunder damage should be 100 when discarding energy, got {}", damage);
     }
 
     #[test]
     fn eval_metallic_thunder_damage_difference() {
-        let (game, _) = create_test_game_basic();
+        let (mut game, _) = create_test_game_basic();
         let base_damage = metallic_thunder_damage(&game, false);
         let boosted_damage = metallic_thunder_damage(&game, true);
         assert!(

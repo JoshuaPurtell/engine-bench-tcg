@@ -106,7 +106,7 @@ mod eval_tests {
     #[test]
     fn eval_is_dual_aura_active_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = is_dual_aura_active(&game, attacker_id);
         assert!(!result, "is_dual_aura_active should return false with basic game state");
     }
@@ -114,7 +114,7 @@ mod eval_tests {
     #[test]
     fn eval_is_body_blocked_by_dual_aura_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = is_body_blocked_by_dual_aura(&game, attacker_id);
         assert!(!result, "is_body_blocked_by_dual_aura should return false with basic game state");
     }

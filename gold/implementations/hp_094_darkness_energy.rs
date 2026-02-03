@@ -20,7 +20,12 @@ pub fn darkness_energy_bonus(game: &GameState, attacker_id: CardInstanceId) -> i
                     if qualifies_for_bonus(name, types) {
                         // Count Darkness Energy attached
                         let darkness_count = active.attached_energy.iter()
-                            .filter(|e| e.is_special && e.name.contains("Darkness"))
+                            .filter(|e| {
+                                game.card_meta.get(&e.def_id).map_or(false, |meta| {
+                                    meta.energy_kind.as_deref() == Some("Special")
+                                        && meta.name.contains("Darkness")
+                                })
+                            })
                             .count();
                         return (darkness_count as i32) * DAMAGE_BONUS;
                     }

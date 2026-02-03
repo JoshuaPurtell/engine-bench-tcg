@@ -1,0 +1,14 @@
+Benchmark idea: "versioned ladder"
+
+Goal: Evaluate a proposed v4 AI (e.g., new card-game agent) by playing it
+against prior versions v1-v3 and scoring its average performance.
+
+Protocol:
+- Fix a standard set of decklists/scenarios and RNG seeds.
+- Run a round-robin where v4 plays N games vs each of v1, v2, v3.
+- Score = average win rate (or average game score) across all matches.
+- Report per-opponent win rates plus overall average.
+
+Notes:
+- Optional: include a minimum N and confidence interval for stability.
+- Optional: weight opponents equally or by recency.

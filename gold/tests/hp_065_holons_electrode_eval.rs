@@ -107,7 +107,7 @@ mod eval_tests {
     #[test]
     fn eval_can_attach_as_energy_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = can_attach_as_energy(&game, attacker_id);
         assert!(!result, "can_attach_as_energy should return false with basic game state");
     }

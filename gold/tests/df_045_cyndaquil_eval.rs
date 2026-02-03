@@ -425,7 +425,7 @@ mod behavioral_tests {
     
     #[test]
     fn eval_cyndaquil_attack_values() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(gnaw_damage(&game, attacker_id), 10);
         assert_eq!(flare_damage(&game, attacker_id), 20);
     }

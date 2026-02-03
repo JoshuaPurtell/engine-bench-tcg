@@ -457,7 +457,7 @@ mod behavioral_tests {
 
     #[test]
     fn eval_prof_elms_can_play_false_without_evolution() {
-        let (game, _, _) = create_basic_test_game();
+        let (mut game, _, _) = create_basic_test_game();
         assert!(!can_play(&game));
     }
 

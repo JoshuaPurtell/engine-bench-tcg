@@ -12,7 +12,8 @@ pub const NAME: &str = "Pidgeotto δ";
 pub const WHIRLWIND_DAMAGE: i32 = 30;
 
 /// Execute Whirlwind switch effect.
-pub fn execute_whirlwind_switch(game: &mut GameState, attacker_id: CardInstanceId) {
+pub fn execute_whirlwind_switch(game: &mut GameState) {
+    let attacker_id = game.players[0].active.as_ref().unwrap().card.id;
     let (_, player_idx) = match find_owner(game, attacker_id) {
         Some(p) => p,
         None => return,

@@ -93,7 +93,9 @@ mod eval_tests {
         );
 
         game.players[0].active = Some(PokemonSlot::new(active_card));
-        game.players[0].discard = discard;
+        for card in discard {
+            game.players[0].discard.add(card);
+        }
         game.players[1].active = Some(PokemonSlot::new(p2_active_card));
         game.turn.player = PlayerId::P1;
 

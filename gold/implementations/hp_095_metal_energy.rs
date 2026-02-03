@@ -18,7 +18,12 @@ pub fn metal_energy_reduction(game: &GameState, defender_id: CardInstanceId) -> 
                     if qualifies_for_reduction(&meta.types) {
                         // Count Metal Energy attached
                         let metal_count = active.attached_energy.iter()
-                            .filter(|e| e.is_special && e.name.contains("Metal"))
+                            .filter(|e| {
+                                game.card_meta.get(&e.def_id).map_or(false, |meta| {
+                                    meta.energy_kind.as_deref() == Some("Special")
+                                        && meta.name.contains("Metal")
+                                })
+                            })
                             .count();
                         return (metal_count as i32) * DAMAGE_REDUCTION;
                     }

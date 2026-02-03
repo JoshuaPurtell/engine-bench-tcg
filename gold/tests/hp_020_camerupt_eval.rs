@@ -105,6 +105,6 @@ mod eval_tests {
     #[test]
     fn eval_execute_split_bomb_returns_bool() {
         let (mut game, attacker_id) = create_basic_test_game();
-        let _result: bool = execute_split_bomb(&mut game, attacker_id, attacker_id);
+        let _result: bool = execute_split_bomb(&mut game, attacker_id, vec![attacker_id]);
     }
 }

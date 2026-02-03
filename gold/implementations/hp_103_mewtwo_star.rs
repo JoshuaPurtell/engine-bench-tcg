@@ -16,7 +16,11 @@ pub fn execute_energy_absorption(game: &mut GameState, attacker_id: CardInstance
     };
     
     // Find any energy in discard and attach to Mewtwo Star
-    if let Some(energy) = game.players[player_idx].discard.find_any_energy() {
+    let energy_id = game.players[player_idx].discard.cards().iter()
+        .find(|c| game.card_meta.get(&c.def_id).map_or(false, |m| m.is_energy))
+        .map(|c| c.id);
+    if let Some(id) = energy_id {
+        let energy = game.players[player_idx].discard.remove(id).unwrap();
         if let Some(active) = &mut game.players[player_idx].active {
             if active.card.id == attacker_id {
                 active.attached_energy.push(energy);

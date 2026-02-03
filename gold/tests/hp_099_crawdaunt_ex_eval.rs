@@ -122,7 +122,7 @@ mod eval_tests {
     fn eval_power_blow_damage_not_hardcoded_zero() {
         // This test verifies the function isn't just returning 0
         // A proper implementation should return a calculated value based on game state
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = power_blow_damage(&game, attacker_id);
         // Function should return valid i32 (implementation-dependent)
         let _ = result;

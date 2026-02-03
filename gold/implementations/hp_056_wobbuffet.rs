@@ -1,8 +1,8 @@
 //! Wobbuffet - HP #56
 use tcg_core::{CardInstanceId, GameState, PlayerId, Prompt, SelectionDestination};
 pub const SET: &str = "HP"; pub const NUMBER: u32 = 56; pub const NAME: &str = "Wobbuffet";
-pub fn execute_call_for_friends(game: &mut GameState, attacker_id: CardInstanceId) {
-    let (player, player_idx) = find_owner(game, attacker_id).unwrap_or((PlayerId::P1, 0));
+pub fn execute_call_for_friends(game: &mut GameState, player: PlayerId) {
+    let player_idx = match player { PlayerId::P1 => 0, PlayerId::P2 => 1 };
     let basics: Vec<CardInstanceId> = game.players[player_idx].deck.cards().iter().filter(|c| game.card_meta.get(&c.def_id).map(|m| m.is_pokemon && m.stage == tcg_core::Stage::Basic).unwrap_or(false)).map(|c| c.id).collect();
     if basics.is_empty() { return; }
     let revealed = game.build_revealed_cards(&basics);

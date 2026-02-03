@@ -21,7 +21,7 @@ pub fn execute_primal_light(game: &mut GameState, source_id: CardInstanceId) -> 
     let revealed = game.build_revealed_cards(&energies);
     let prompt = Prompt::ChooseCardsFromDeck {
         player, count: 1, options: energies, revealed_cards: revealed,
-        min: None, max: Some(1), destination: SelectionDestination::AttachToTargets(targets), shuffle: true,
+        min: None, max: Some(1), destination: SelectionDestination::AttachTo(targets[0]), shuffle: true,
     };
     game.set_pending_prompt(prompt, player);
     true

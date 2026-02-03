@@ -30,7 +30,7 @@ pub const NAME: &str = "Rayquaza δ";
 pub fn is_hydro_barrier_active(game: &GameState, rayquaza_id: CardInstanceId) -> bool {
     let attached = game.get_attached_energy(rayquaza_id);
 
-    attached.iter().any(|&energy_id| is_holon_energy(game, energy_id))
+    attached.iter().any(|energy| is_holon_energy(game, energy.id))
 }
 
 /// Check if a Pokemon's Weakness should be removed by Hydro Barrier.

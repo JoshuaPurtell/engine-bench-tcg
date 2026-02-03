@@ -411,7 +411,7 @@ mod behavioral_tests {
     
     #[test]
     fn eval_kirlia_delta_attack_values() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(super_psy_damage(&game, attacker_id), 20);
         assert_eq!(mind_shock_damage(&game, attacker_id), 40);
     }

@@ -106,7 +106,7 @@ mod eval_tests {
     #[test]
     fn eval_is_delta_species_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = is_delta_species(&game, attacker_id);
         assert!(!result, "is_delta_species should return false with basic game state");
     }

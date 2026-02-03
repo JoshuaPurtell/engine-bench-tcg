@@ -7,6 +7,7 @@
 mod eval_tests {
     use super::*;
     use tcg_core::{CardDefId, CardInstance, CardInstanceId, CardMeta, CardMetaMap, GameState, PlayerId, PokemonSlot, Stage, Type};
+    use tcg_core::zone::Zone;
     use tcg_rules_ex::RulesetConfig;
 
     // ========================================================================
@@ -69,6 +70,7 @@ mod eval_tests {
         }
     }
 
+    #[allow(dead_code)]
     fn create_supporter_meta(name: &str) -> CardMeta {
         CardMeta {
             card_type: String::new(),
@@ -151,11 +153,6 @@ mod eval_tests {
         let active_card = CardInstance::new(active_def_id, PlayerId::P1);
         let attacker_id = active_card.id;
 
-        // Create a Supporter in "play" zone
-        let supporter_def_id = CardDefId::new("SUPPORTER-IN-PLAY".to_string());
-        card_meta_map.insert(supporter_def_id.clone(), create_supporter_meta("TV Reporter"));
-        let supporter_card = CardInstance::new(supporter_def_id, PlayerId::P1);
-
         // P2 active
         let p2_active_def_id = CardDefId::new("P2-ACTIVE".to_string());
         card_meta_map.insert(p2_active_def_id.clone(), create_pokemon_meta("Defending Pokemon", false, Stage::Basic));
@@ -182,8 +179,8 @@ mod eval_tests {
         );
 
         game.players[0].active = Some(PokemonSlot::new(active_card));
-        // Put supporter in play (typically supporter_in_play field)
-        game.players[0].supporter_in_play = Some(supporter_card);
+        // Signal that a supporter has been played this turn
+        game.players[0].played_supporter_this_turn = true;
         game.players[1].active = Some(PokemonSlot::new(p2_active_card));
         game.turn.player = PlayerId::P1;
 
@@ -249,7 +246,9 @@ mod eval_tests {
         );
 
         game.players[0].active = Some(PokemonSlot::new(active_card));
-        game.players[0].hand = hand;
+        for card in hand {
+            game.players[0].hand.add(card);
+        }
         game.players[1].active = Some(PokemonSlot::new(p2_active_card));
         game.players[1].bench.push(PokemonSlot::new(p2_bench_card));
         game.turn.player = PlayerId::P1;

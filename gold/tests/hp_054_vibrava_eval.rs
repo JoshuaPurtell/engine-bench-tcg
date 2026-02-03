@@ -106,7 +106,7 @@ mod eval_tests {
     fn eval_knock_away_bonus_on_heads_not_hardcoded_zero() {
         // This test verifies the function isn't just returning 0
         // A proper implementation should return a calculated value based on game state
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = knock_away_bonus_on_heads();
         // Function should return valid i32 (implementation-dependent)
         let _ = result;

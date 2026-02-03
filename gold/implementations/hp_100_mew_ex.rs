@@ -41,7 +41,7 @@ pub fn execute_psychic_vision(game: &mut GameState, source_id: CardInstanceId) -
 
 pub fn execute_devo_crush(game: &mut GameState, attacker_id: CardInstanceId, discard_energy: bool) -> bool {
     if !discard_energy {
-        return true; // Just do the damage
+        return false; // No devolution without discarding energy
     }
     
     let (player, player_idx) = match find_owner(game, attacker_id) {

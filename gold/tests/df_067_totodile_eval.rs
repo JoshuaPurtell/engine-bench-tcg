@@ -426,7 +426,7 @@ mod behavioral_tests {
     
     #[test]
     fn eval_totodile_attack_values() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(bite_damage(&game, attacker_id), 10);
         assert_eq!(wave_splash_damage(&game, attacker_id), 20);
     }

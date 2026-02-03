@@ -29,7 +29,7 @@ pub const NAME: &str = "Pidgeot δ";
 pub fn is_delta_reserve_active(game: &GameState, pidgeot_id: CardInstanceId) -> bool {
     let attached = game.get_attached_energy(pidgeot_id);
 
-    attached.iter().any(|&energy_id| is_holon_energy(game, energy_id))
+    attached.iter().any(|energy| is_holon_energy(game, energy.id))
 }
 
 /// Check if a card is a Holon Energy.
@@ -87,7 +87,7 @@ pub fn execute_rotating_claws_effect(game: &mut GameState, attacker_id: CardInst
     let attached_energy: Vec<CardInstanceId> = game
         .get_attached_energy(attacker_id)
         .iter()
-        .copied()
+        .map(|c| c.id)
         .collect();
 
     if attached_energy.is_empty() {

@@ -122,7 +122,9 @@ mod eval_tests {
 
         game.players[0].active = Some(PokemonSlot::new(active_card));
         game.players[1].active = Some(PokemonSlot::new(p2_active_card));
-        game.players[1].hand = p2_hand;
+        for card in p2_hand {
+            game.players[1].hand.add(card);
+        }
         game.turn.player = PlayerId::P1;
 
         (game, vileplume_id)

@@ -117,7 +117,7 @@ mod eval_tests {
     fn eval_execute_split_bomb_executes_without_panic() {
         let (mut game, attacker_id) = create_basic_test_game();
         // Function should execute without panicking
-        execute_split_bomb(&mut game, attacker_id);
+        execute_split_bomb(&mut game, vec![attacker_id]);
         // Verify game state is still valid after execution
         assert!(game.players[0].active.is_some(), "Game state should remain valid");
     }
