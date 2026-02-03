@@ -15,6 +15,8 @@ mod eval_tests {
 
     fn create_card_meta(name: &str, is_pokemon: bool, is_energy: bool, energy_type: Option<Type>) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: is_pokemon || is_energy,
             is_tool: false,

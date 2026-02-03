@@ -28,12 +28,15 @@ pub fn sand_damage_between_turns(game: &mut GameState, flygon_id: CardInstanceId
     }
 
     // Put 1 damage counter on each opponent's Benched Basic Pokemon
+    // Collect basic pokemon ids first to avoid borrow conflict
+    let basic_ids: Vec<CardInstanceId> = game.opponent_player().bench.iter()
+        .filter(|slot| game.card_meta.get(&slot.card.def_id).map(|m| m.is_basic).unwrap_or(false))
+        .map(|slot| slot.card.id)
+        .collect();
     let opponent = game.opponent_player_mut();
     for slot in &mut opponent.bench {
-        if let Some(meta) = game.card_meta(&slot.card.def_id) {
-            if meta.is_basic {
-                slot.damage_counters += 1;
-            }
+        if basic_ids.contains(&slot.card.id) {
+            slot.damage_counters += 1;
         }
     }
 }
@@ -60,18 +63,17 @@ pub fn super_sweep_up_effect(
     defender_id: CardInstanceId,
 ) -> bool {
     if game.flip_coin() {
-        // Return 1 Energy from defender to opponent's hand
-        if let Some(slot) = game.opponent_player_mut().find_pokemon_mut(defender_id) {
-            for i in 0..slot.attached.len() {
-                if let Some(card) = slot.attached.get(i) {
-                    if let Some(meta) = game.card_meta(&card.def_id) {
-                        if meta.is_energy {
-                            let energy = slot.attached.remove(i);
-                            game.opponent_player_mut().hand.add(energy);
-                            return true;
-                        }
-                    }
-                }
+        // Find first energy index on defender
+        let energy_idx = if let Some(slot) = game.opponent_player().find_pokemon(defender_id) {
+            slot.attached_energy.iter().position(|_| true)
+        } else {
+            None
+        };
+        if let Some(idx) = energy_idx {
+            if let Some(slot) = game.opponent_player_mut().find_pokemon_mut(defender_id) {
+                let energy = slot.attached_energy.remove(idx);
+                game.opponent_player_mut().hand.add(energy);
+                return true;
             }
         }
     }

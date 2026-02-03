@@ -44,6 +44,8 @@ mod deep_stateful_tests {
 
     fn create_pokemon_meta(name: &str, hp: u16, is_basic: bool) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic,
             is_tool: false,

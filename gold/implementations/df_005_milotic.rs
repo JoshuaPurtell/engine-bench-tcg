@@ -10,7 +10,7 @@
 //! the effect of this power. This power can't be used if Milotic is affected
 //! by a Special Condition.
 
-use tcg_core::{CardInstanceId, EffectAst, GameState, PlayerId, Prompt};
+use tcg_core::{CardInstanceId, EffectAst, GameState, PlayerId, Prompt, SelectionDestination};
 
 /// Card identifiers
 pub const SET: &str = "DF";
@@ -73,6 +73,9 @@ pub fn execute_sharing(game: &mut GameState, source_id: CardInstanceId) -> bool 
         min: Some(0),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, owner, sharing_effect_id(), Some(source_id));
     true

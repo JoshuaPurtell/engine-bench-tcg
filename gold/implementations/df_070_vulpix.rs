@@ -45,7 +45,7 @@ pub fn confuse_ray_effect(
     if heads {
         // Apply Confused to defender
         if let Some(slot) = game.opponent_player_mut().find_pokemon_mut(defender_id) {
-            slot.conditions.confused = true;
+            slot.add_special_condition(tcg_rules_ex::SpecialCondition::Confused);
         }
         true
     } else {

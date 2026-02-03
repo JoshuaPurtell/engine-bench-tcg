@@ -30,19 +30,20 @@ pub fn luster_purge_damage(_game: &GameState, _attacker_id: CardInstanceId) -> i
 }
 
 pub fn luster_purge_discard(game: &mut GameState, attacker_id: CardInstanceId) {
+    // Discard up to 3 energy cards from attacker
     if let Some(slot) = game.current_player_mut().find_pokemon_mut(attacker_id) {
         let mut count = 0;
-        slot.attached.retain(|card| {
+        let mut keep = Vec::new();
+        let energy = std::mem::take(&mut slot.attached_energy);
+        for card in energy {
             if count < 3 {
-                if let Some(meta) = game.card_meta(&card.def_id) {
-                    if meta.is_energy {
-                        count += 1;
-                        return false;
-                    }
-                }
+                count += 1;
+                // discard
+            } else {
+                keep.push(card);
             }
-            true
-        });
+        }
+        slot.attached_energy = keep;
     }
 }
 

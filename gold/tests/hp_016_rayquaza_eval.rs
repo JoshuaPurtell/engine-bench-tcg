@@ -15,6 +15,8 @@ mod eval_tests {
 
     fn create_pokemon_meta(name: &str, is_delta: bool, types: Vec<Type>) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: true,
             is_tool: false,
@@ -41,6 +43,8 @@ mod eval_tests {
 
     fn create_energy_meta(name: &str, provides: Vec<Type>, is_special: bool) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: !is_special,
             is_tool: false,

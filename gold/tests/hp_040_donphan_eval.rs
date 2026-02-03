@@ -15,6 +15,8 @@ mod eval_tests {
 
     fn create_pokemon_meta(name: &str, stage: Stage, types: Vec<Type>) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: stage == Stage::Basic,
             is_tool: false,

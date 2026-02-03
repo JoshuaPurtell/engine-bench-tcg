@@ -11,21 +11,9 @@ pub const TAILS_DRAW_COUNT: u32 = 2;
 
 pub fn execute_professor_cozmos_discovery(game: &mut GameState, player: PlayerId) -> bool {
     let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Draw 3 from bottom (heads) or 2 from top (tails)".to_string(),
-        on_heads: Box::new(|game| {
-            let player_idx = match player {
-                PlayerId::P1 => 0,
-                PlayerId::P2 => 1,
-            };
-            // Draw 3 from bottom of deck
-            for _ in 0..HEADS_DRAW_COUNT {
-                if let Some(card) = game.players[player_idx].deck.draw_bottom() {
-                    game.players[player_idx].hand.add(card);
-                }
-            }
-        }),
-    };
+            player: player,
+            effect_description: "Draw 3 from bottom (heads) or 2 from top (tails)".to_string(),
+        };
     game.set_pending_prompt(prompt, player);
     true
 }

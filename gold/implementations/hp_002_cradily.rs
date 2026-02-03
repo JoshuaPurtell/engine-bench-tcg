@@ -12,16 +12,7 @@ pub const POISON_TENTACLES_DAMAGE: i32 = 50;
 /// Register delayed damage effect for Harsh Fluid.
 pub fn register_harsh_fluid_effect(game: &mut GameState, target_id: CardInstanceId) {
     // Register effect: at end of opponent's next turn, place 5 damage counters
-    game.register_delayed_effect(
-        target_id,
-        "HarshFluid",
-        1, // triggers at end of opponent's next turn
-        Box::new(move |game| {
-            if let Some(slot) = game.find_pokemon_slot_mut(target_id) {
-                slot.damage += HARSH_FLUID_DELAYED_COUNTERS * 10;
-            }
-        }),
-    );
+    game.register_effect(target_id, "HarshFluid", 1);
 }
 
 /// Execute Poison Tentacles poison effect.

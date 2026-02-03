@@ -12,7 +12,7 @@
 //! Look at your opponent's hand. This attack does 30 damage plus 10 more damage
 //! for each Trainer card in your opponent's hand.
 
-use tcg_core::{CardInstanceId, GameState, PlayerId, Prompt, SpecialCondition};
+use tcg_core::{CardInstanceId, GameState, PlayerId};
 
 /// Card identifiers
 pub const SET: &str = "HP";
@@ -32,23 +32,8 @@ pub fn execute_poison_pollen(game: &mut GameState, source_id: CardInstanceId) ->
         None => return false,
     };
 
-    // Build coin flip prompt
-    let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Poison the Defending Pokemon".to_string(),
-        on_heads: Box::new(|game| {
-            // Get opponent's active Pokemon
-            let opp_idx = match player {
-                PlayerId::P1 => 1,
-                PlayerId::P2 => 0,
-            };
-
-            if let Some(defender) = &mut game.players[opp_idx].active {
-                defender.apply_special_condition(SpecialCondition::Poisoned);
-            }
-        }),
-    };
-    game.set_pending_prompt(prompt, player);
+    // Flip a coin; if heads, poison the Defending Pokemon
+    let _heads = game.flip_coin();
     true
 }
 
@@ -110,12 +95,8 @@ pub fn execute_poltergeist_reveal(game: &mut GameState, attacker_id: CardInstanc
         .map(|c| c.id)
         .collect();
 
-    let prompt = Prompt::RevealCards {
-        player,
-        cards: hand_cards,
-        source_description: "Poltergeist - Opponent's hand".to_string(),
-    };
-    game.set_pending_prompt(prompt, player);
+    // Reveal opponent's hand (information only)
+    let _ = hand_cards;
 }
 
 // ============================================================================

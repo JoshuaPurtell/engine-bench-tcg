@@ -27,6 +27,8 @@ mod deep_stateful_tests {
 
     fn create_pokemon_meta(name: &str) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: true,
             is_tool: false,

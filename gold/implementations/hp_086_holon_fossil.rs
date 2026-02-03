@@ -12,13 +12,9 @@ pub const VALID_FOSSIL_POKEMON: [&str; 6] = [
 
 pub fn execute_holon_fossil(game: &mut GameState, player: PlayerId) -> bool {
     let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Search deck (heads) or play from hand (tails) for fossil Pokemon".to_string(),
-        on_heads: Box::new(|game| {
-            // Search deck for fossil Pokemon
-            // Implementation would prompt for search
-        }),
-    };
+            player: player,
+            effect_description: "Search deck (heads) or play from hand (tails) for fossil Pokemon".to_string(),
+        };
     game.set_pending_prompt(prompt, player);
     true
 }

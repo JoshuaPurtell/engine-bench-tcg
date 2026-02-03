@@ -12,10 +12,9 @@ pub fn execute_rock_slide_bench(game: &mut GameState, attacker_id: CardInstanceI
     let opp_idx = 1 - player_idx;
     let bench: Vec<CardInstanceId> = game.players[opp_idx].bench.iter().map(|s| s.card.id).collect();
     if bench.is_empty() { return; }
-    let prompt = Prompt::ChoosePokemonTargets {
-        player, min: bench.len().min(2), max: 2,
-        valid_targets: bench,
-        effect_description: "Choose 2 Benched Pokemon to deal 10 damage".to_string(),
+    let prompt = Prompt::ChoosePokemonInPlay {
+        player, options: bench,
+        min: 1, max: 2,
     };
     game.set_pending_prompt(prompt, player);
 }

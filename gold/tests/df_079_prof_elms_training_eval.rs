@@ -86,6 +86,8 @@ mod behavioral_tests {
         retreat_cost: u8,
     ) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: stage == Stage::Basic,
             is_tool: false,
@@ -112,6 +114,8 @@ mod behavioral_tests {
 
     fn create_energy_meta(name: &str, energy_type: Type) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: false,
             is_tool: false,
@@ -138,6 +142,8 @@ mod behavioral_tests {
 
     fn create_trainer_meta(name: &str, trainer_kind: Option<&str>, is_tool: bool) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: false,
             is_tool,

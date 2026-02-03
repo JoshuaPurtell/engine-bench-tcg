@@ -36,7 +36,7 @@ pub fn smokescreen_effect(
 ) {
     // Apply smokescreen marker to defender
     if let Some(slot) = game.opponent_player_mut().find_pokemon_mut(defender_id) {
-        slot.markers.insert("Smokescreen".to_string());
+        slot.markers.push(tcg_core::Marker::new("Smokescreen"));
     }
 }
 
@@ -58,17 +58,20 @@ pub fn flamethrower_cost(
     game: &mut GameState,
     attacker_id: CardInstanceId,
 ) {
-    // Discard a Fire Energy from attacker
-    if let Some(slot) = game.current_player_mut().find_pokemon_mut(attacker_id) {
-        for i in 0..slot.attached.len() {
-            if let Some(card) = slot.attached.get(i) {
-                if let Some(meta) = game.card_meta(&card.def_id) {
-                    if meta.is_energy && meta.energy_kind.as_deref() == Some("Fire") {
-                        slot.attached.remove(i);
-                        break;
-                    }
-                }
-            }
+    // Find the index of a Fire Energy on attacker
+    let fire_idx = if let Some(slot) = game.current_player().find_pokemon(attacker_id) {
+        slot.attached_energy.iter().position(|card| {
+            game.card_meta.get(&card.def_id)
+                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Fire"))
+                .unwrap_or(false)
+        })
+    } else {
+        None
+    };
+    // Remove it
+    if let Some(idx) = fire_idx {
+        if let Some(slot) = game.current_player_mut().find_pokemon_mut(attacker_id) {
+            slot.attached_energy.remove(idx);
         }
     }
 }

@@ -28,6 +28,8 @@ mod deep_stateful_tests {
 
     fn create_pokemon_meta(name: &str, is_delta: bool) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: true,
             is_tool: false,
@@ -131,6 +133,8 @@ mod deep_stateful_tests_2 {
 
     fn create_pokemon_meta(name: &str, is_delta: bool, attacks: Vec<Attack>) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: true,
             is_tool: false,

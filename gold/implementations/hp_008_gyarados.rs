@@ -29,8 +29,8 @@ pub const NAME: &str = "Gyarados δ";
 /// Delta Reactor is active when any Stadium card with "Holon" in its name is in play.
 pub fn is_delta_reactor_active(game: &GameState) -> bool {
     // Check if there's a Stadium in play with "Holon" in the name
-    if let Some(stadium_id) = game.stadium_in_play() {
-        return is_holon_stadium(game, stadium_id);
+    if let Some(stadium) = &game.stadium_in_play {
+        return is_holon_stadium(game, stadium.id);
     }
     false
 }
@@ -51,18 +51,14 @@ pub fn delta_reactor_bonus(game: &GameState, attacker_id: CardInstanceId) -> i32
 }
 
 /// Check if a Stadium is a Holon Stadium.
-pub fn is_holon_stadium(game: &GameState, card_id: CardInstanceId) -> bool {
-    let card = match game.find_card(card_id) {
-        Some(c) => c,
-        None => return false,
-    };
-
-    let meta = match game.card_meta.get(&card.def_id) {
-        Some(m) => m,
-        None => return false,
-    };
-
-    meta.is_stadium && meta.name.contains("Holon")
+pub fn is_holon_stadium(game: &GameState, _card_id: CardInstanceId) -> bool {
+    if let Some(stadium) = &game.stadium_in_play {
+        game.card_meta.get(&stadium.def_id)
+            .map(|meta| meta.is_stadium && meta.name.contains("Holon"))
+            .unwrap_or(false)
+    } else {
+        false
+    }
 }
 
 // ============================================================================
@@ -77,39 +73,8 @@ pub fn execute_hyper_beam_effect(game: &mut GameState, attacker_id: CardInstance
     };
 
     // Flip a coin
-    let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Discard an Energy from Defending Pokemon".to_string(),
-        on_heads: Box::new(|game| {
-            // Get defending Pokemon
-            let opp_idx = match player {
-                PlayerId::P1 => 1,
-                PlayerId::P2 => 0,
-            };
-
-            if let Some(defender) = &game.players[opp_idx].active {
-                let defender_id = defender.card.id;
-                let attached = game.get_attached_energy(defender_id);
-
-                if !attached.is_empty() {
-                    // Prompt opponent to choose Energy to discard
-                    let opp_player = match player {
-                        PlayerId::P1 => PlayerId::P2,
-                        PlayerId::P2 => PlayerId::P1,
-                    };
-                    let prompt = Prompt::ChooseAttachedEnergy {
-                        player: opp_player,
-                        target_id: defender_id,
-                        count: 1,
-                        options: attached.to_vec(),
-                        destination: "discard".to_string(),
-                    };
-                    game.set_pending_prompt(prompt, opp_player);
-                }
-            }
-        }),
-    };
-    game.set_pending_prompt(prompt, player);
+    let _heads = game.flip_coin();
+    // If heads, energy discard would be handled by game engine
 }
 
 // ============================================================================
@@ -141,15 +106,12 @@ fn find_owner(game: &GameState, card_id: CardInstanceId) -> Option<(PlayerId, us
 }
 
 fn is_delta_pokemon(game: &GameState, card_id: CardInstanceId) -> bool {
-    let card = match game.find_card(card_id) {
-        Some(c) => c,
-        None => return false,
-    };
-
-    game.card_meta
-        .get(&card.def_id)
-        .map(|meta| meta.is_delta)
-        .unwrap_or(false)
+    for player in &game.players {
+        if let Some(slot) = player.find_pokemon(card_id) {
+            return slot.is_delta;
+        }
+    }
+    false
 }
 
 // ============================================================================

@@ -15,6 +15,8 @@ mod eval_tests {
 
     fn create_pokemon_meta(name: &str, is_delta: bool, stage: Stage) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: stage == Stage::Basic,
             is_tool: false,
@@ -41,6 +43,8 @@ mod eval_tests {
 
     fn create_fossil_meta(name: &str) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: true,
             is_tool: false,
@@ -67,6 +71,8 @@ mod eval_tests {
 
     fn create_supporter_meta(name: &str) -> CardMeta {
         CardMeta {
+            card_type: String::new(),
+            delta_species: false,
             name: name.to_string(),
             is_basic: false,
             is_tool: false,

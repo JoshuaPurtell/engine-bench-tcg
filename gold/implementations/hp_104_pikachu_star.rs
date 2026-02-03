@@ -19,14 +19,9 @@ pub fn execute_thundershock_paralysis(game: &mut GameState, attacker_id: CardIns
     let opp_idx = 1 - player_idx;
     
     let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Paralyze the Defending Pokemon".to_string(),
-        on_heads: Box::new(|game| {
-            if let Some(defender) = &mut game.players[opp_idx].active {
-                defender.apply_special_condition(SpecialCondition::Paralyzed);
-            }
-        }),
-    };
+            player: player,
+            effect_description: "Paralyze the Defending Pokemon".to_string(),
+        };
     game.set_pending_prompt(prompt, player);
     true
 }

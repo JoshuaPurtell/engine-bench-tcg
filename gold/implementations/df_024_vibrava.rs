@@ -31,7 +31,7 @@ pub fn psychic_wing_retreat_reduction(
     }
 }
 
-pub fn quick_blow_damage(game: &GameState, _attacker_id: CardInstanceId) -> i32 {
+pub fn quick_blow_damage(game: &mut GameState, _attacker_id: CardInstanceId) -> i32 {
     let base = 30;
     if game.flip_coin() {
         base + 20

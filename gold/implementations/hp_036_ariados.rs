@@ -13,8 +13,8 @@ pub fn apply_reactive_poison(game: &mut GameState, ariados_id: CardInstanceId) {
     // Put 2 damage counters instead of 1 on each Poisoned Pokemon
     for p in &mut game.players {
         if let Some(ref mut active) = p.active {
-            if active.status_conditions.contains(&"Poisoned".to_string()) {
-                active.damage_counters += REACTIVE_POISON_COUNTERS; // +2 instead of +1
+            if active.has_special_condition(tcg_rules_ex::SpecialCondition::Poisoned) {
+                active.damage_counters += REACTIVE_POISON_COUNTERS as u16; // +2 instead of +1
             }
         }
     }

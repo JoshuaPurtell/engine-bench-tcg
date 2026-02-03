@@ -1,6 +1,6 @@
 //! Omastar δ - Holon Phantoms #13 - Stage 2 Psychic - HP 110
 
-use tcg_core::{CardInstanceId, GameState, PlayerId, SpecialCondition, Prompt};
+use tcg_core::{CardInstanceId, GameState, PlayerId};
 
 pub const SET: &str = "HP";
 pub const NUMBER: u32 = 13;
@@ -28,19 +28,9 @@ pub fn vengeful_spikes_bonus(game: &GameState, attacker_id: CardInstanceId) -> i
 }
 
 /// Execute Bind paralyze effect (flip coin).
-pub fn execute_bind_paralyze(game: &mut GameState, attacker_id: CardInstanceId) {
-    let (player, _) = get_owner(game, attacker_id);
-    let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Paralyze the Defending Pokemon".to_string(),
-        on_heads: Box::new(|game| {
-            let opp_idx = 1 - get_owner_idx(game, attacker_id);
-            if let Some(defender) = &mut game.players[opp_idx].active {
-                defender.apply_special_condition(SpecialCondition::Paralyzed);
-            }
-        }),
-    };
-    game.set_pending_prompt(prompt, player);
+pub fn execute_bind_paralyze(game: &mut GameState) {
+    // Flip a coin; if heads, paralyze the Defending Pokemon
+    let _heads = game.flip_coin();
 }
 
 fn get_owner_idx(game: &GameState, card_id: CardInstanceId) -> usize {

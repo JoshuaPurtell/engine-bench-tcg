@@ -14,7 +14,7 @@ pub fn apply_toxic_sludge(game: &mut GameState, muk_id: CardInstanceId) -> bool 
     // Put 1 damage counter on each active Pokemon
     for p in &mut game.players {
         if let Some(ref mut active) = p.active {
-            active.damage_counters += TOXIC_SLUDGE_COUNTERS;
+            active.damage_counters += TOXIC_SLUDGE_COUNTERS as u16;
         }
     }
     true

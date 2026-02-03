@@ -33,12 +33,11 @@ pub fn execute_whirlwind_switch(game: &mut GameState, attacker_id: CardInstanceI
     }
 
     // Prompt opponent to choose which Pokemon to switch in
-    let prompt = Prompt::ChoosePokemonTargets {
+    let prompt = Prompt::ChoosePokemonInPlay {
         player: opponent,
+        options: bench_targets,
         min: 1,
         max: 1,
-        valid_targets: bench_targets,
-        effect_description: "Choose a Pokemon to switch in".to_string(),
     };
     game.set_pending_prompt(prompt, opponent);
 }

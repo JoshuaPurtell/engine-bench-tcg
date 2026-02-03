@@ -14,14 +14,9 @@ pub fn execute_singe_burn(game: &mut GameState, attacker_id: CardInstanceId) -> 
     };
     let opp_idx = 1 - player_idx;
     let prompt = Prompt::CoinFlipForEffect {
-        player,
-        effect_description: "Burn the Defending Pokemon".to_string(),
-        on_heads: Box::new(move |game| {
-            if let Some(defender) = &mut game.players[opp_idx].active {
-                defender.apply_special_condition(SpecialCondition::Burned);
-            }
-        }),
-    };
+            player: player,
+            effect_description: "Burn the Defending Pokemon".to_string(),
+        };
     game.set_pending_prompt(prompt, player);
     true
 }

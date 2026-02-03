@@ -20,7 +20,7 @@ pub fn sand_tomb_effect(
     defender_id: CardInstanceId,
 ) {
     if let Some(slot) = game.opponent_player_mut().find_pokemon_mut(defender_id) {
-        slot.markers.insert("CantRetreat".to_string());
+        slot.markers.push(tcg_core::Marker::new("CantRetreat"));
     }
 }
 
