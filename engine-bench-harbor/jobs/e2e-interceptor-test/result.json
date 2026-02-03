@@ -1,0 +1,29 @@
+{
+    "id": "a39b9181-29a7-4c9f-9d68-b9d82c32fb72",
+    "started_at": "2026-01-31T16:30:31.800771",
+    "finished_at": "2026-01-31T16:31:29.309018",
+    "n_total_trials": 1,
+    "stats": {
+        "n_trials": 1,
+        "n_errors": 0,
+        "evals": {
+            "claude-code__adhoc": {
+                "n_trials": 1,
+                "n_errors": 0,
+                "metrics": [
+                    {
+                        "mean": 0.7667
+                    }
+                ],
+                "reward_stats": {
+                    "reward": {
+                        "0.7667": [
+                            "df-001-ampharos__SbWfQPy"
+                        ]
+                    }
+                },
+                "exception_stats": {}
+            }
+        }
+    }
+}

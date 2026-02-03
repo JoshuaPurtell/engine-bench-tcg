@@ -146,21 +146,21 @@ mod eval_tests {
 
     #[test]
     fn eval_battle_aura_bonus_with_feraligatr_and_delta_attacker() {
-        let (game, attacker_id) = create_test_game_with_feraligatr(true, true);
+        let (mut game, attacker_id) = create_test_game_with_feraligatr(true, true);
         let bonus = battle_aura_bonus(&game, attacker_id);
         assert_eq!(bonus, 10, "With Feraligatr in play and delta attacker, bonus should be 10, got {}", bonus);
     }
 
     #[test]
     fn eval_battle_aura_bonus_without_feraligatr() {
-        let (game, attacker_id) = create_test_game_with_feraligatr(false, true);
+        let (mut game, attacker_id) = create_test_game_with_feraligatr(false, true);
         let bonus = battle_aura_bonus(&game, attacker_id);
         assert_eq!(bonus, 0, "Without Feraligatr, bonus should be 0, got {}", bonus);
     }
 
     #[test]
     fn eval_battle_aura_bonus_with_feraligatr_but_non_delta_attacker() {
-        let (game, attacker_id) = create_test_game_with_feraligatr(true, false);
+        let (mut game, attacker_id) = create_test_game_with_feraligatr(true, false);
         let bonus = battle_aura_bonus(&game, attacker_id);
         assert_eq!(bonus, 0, "With non-delta attacker, bonus should be 0, got {}", bonus);
     }

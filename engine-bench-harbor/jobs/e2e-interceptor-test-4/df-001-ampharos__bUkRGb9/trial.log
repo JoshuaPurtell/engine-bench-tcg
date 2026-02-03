@@ -1,0 +1,3 @@
+Trial df-001-ampharos__bUkRGb9 failed: API key or JWT token is required
+Failed to download logs to jobs/e2e-interceptor-test-4/df-001-ampharos__bUkRGb9/agent
+Sandbox not found. Please build the environment first.

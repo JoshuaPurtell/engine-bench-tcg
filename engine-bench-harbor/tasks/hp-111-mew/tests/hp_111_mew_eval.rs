@@ -103,7 +103,7 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_super_psywave_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_super_psywave(&mut game, attacker_id, attacker_id);
     }
 }

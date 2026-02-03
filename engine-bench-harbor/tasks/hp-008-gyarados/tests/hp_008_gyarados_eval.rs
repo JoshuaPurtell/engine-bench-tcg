@@ -215,14 +215,14 @@ mod eval_tests {
 
     #[test]
     fn eval_is_delta_reactor_active_false_without_stadium() {
-        let (game, _) = create_test_game();
+        let (mut game, _) = create_test_game();
         let result = is_delta_reactor_active(&game);
         assert!(!result, "Delta Reactor should be inactive without any Stadium");
     }
 
     #[test]
     fn eval_is_delta_reactor_active_true_with_holon_stadium() {
-        let (game, _, _) = create_test_game_with_holon_stadium();
+        let (mut game, _, _) = create_test_game_with_holon_stadium();
         let result = is_delta_reactor_active(&game);
         assert!(result, "Delta Reactor should be active with Holon Lake in play");
     }
@@ -233,14 +233,14 @@ mod eval_tests {
 
     #[test]
     fn eval_delta_reactor_bonus_zero_without_stadium() {
-        let (game, gyarados_id) = create_test_game();
+        let (mut game, gyarados_id) = create_test_game();
         let bonus = delta_reactor_bonus(&game, gyarados_id);
         assert_eq!(bonus, 0, "Delta Reactor bonus should be 0 without Holon Stadium, got {}", bonus);
     }
 
     #[test]
     fn eval_delta_reactor_bonus_10_with_holon_stadium_and_delta_attacker() {
-        let (game, gyarados_id, _) = create_test_game_with_holon_stadium();
+        let (mut game, gyarados_id, _) = create_test_game_with_holon_stadium();
         let bonus = delta_reactor_bonus(&game, gyarados_id);
         assert_eq!(bonus, 10, "Delta Reactor bonus should be 10 with Holon Stadium and delta attacker, got {}", bonus);
     }
@@ -251,14 +251,14 @@ mod eval_tests {
 
     #[test]
     fn eval_is_holon_stadium_true_for_holon_lake() {
-        let (game, _, stadium_id) = create_test_game_with_holon_stadium();
+        let (mut game, _, stadium_id) = create_test_game_with_holon_stadium();
         let result = is_holon_stadium(&game, stadium_id);
         assert!(result, "Holon Lake should be recognized as a Holon Stadium");
     }
 
     #[test]
     fn eval_is_holon_stadium_false_for_pokemon() {
-        let (game, gyarados_id, _) = create_test_game_with_holon_stadium();
+        let (mut game, gyarados_id, _) = create_test_game_with_holon_stadium();
         let result = is_holon_stadium(&game, gyarados_id);
         assert!(!result, "Pokemon should not be recognized as Holon Stadium");
     }

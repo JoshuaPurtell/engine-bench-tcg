@@ -134,14 +134,14 @@ mod eval_tests {
 
     #[test]
     fn eval_extra_claws_vs_ex() {
-        let (game, defender_id) = create_test_game_for_extra_claws(true);
+        let (mut game, defender_id) = create_test_game_for_extra_claws(true);
         let bonus = extra_claws_bonus(&game, defender_id);
         assert_eq!(bonus, 20, "Against Pokemon-ex, bonus should be 20, got {}", bonus);
     }
 
     #[test]
     fn eval_extra_claws_vs_non_ex() {
-        let (game, defender_id) = create_test_game_for_extra_claws(false);
+        let (mut game, defender_id) = create_test_game_for_extra_claws(false);
         let bonus = extra_claws_bonus(&game, defender_id);
         assert_eq!(bonus, 0, "Against non-ex Pokemon, bonus should be 0, got {}", bonus);
     }

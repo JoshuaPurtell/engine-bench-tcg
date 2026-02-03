@@ -128,6 +128,10 @@ export DAYTONA_URL="https://your-daytona-server.com"  # Optional
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
+### Integrations
+
+For detailed documentation on infrastructure providers (Daytona, Kernel), coding agents (Claude Code, Codex, OpenCode), and routing through the Synth interceptor, see **[INTEGRATIONS.md](INTEGRATIONS.md)**.
+
 ### Performance Tips
 
 - **Docker:** Good for local testing, limited by local CPU/memory

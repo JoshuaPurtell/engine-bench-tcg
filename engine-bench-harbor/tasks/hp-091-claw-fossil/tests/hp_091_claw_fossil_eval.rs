@@ -103,13 +103,13 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_jagged_stone_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_jagged_stone(&mut game, attacker_id);
     }
 
     #[test]
     fn eval_should_trigger_jagged_stone_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = should_trigger_jagged_stone(&game, attacker_id);
     }
 }

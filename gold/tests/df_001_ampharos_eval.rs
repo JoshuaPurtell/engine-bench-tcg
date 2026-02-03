@@ -147,21 +147,21 @@ mod eval_tests {
 
     #[test]
     fn eval_delta_circle_with_1_delta() {
-        let (game, attacker_id) = create_test_game_with_delta_pokemon(1);
+        let (mut game, attacker_id) = create_test_game_with_delta_pokemon(1);
         let bonus = delta_circle_bonus(&game, attacker_id);
         assert_eq!(bonus, 10, "With 1 delta Pokemon (self), bonus should be 10, got {}", bonus);
     }
 
     #[test]
     fn eval_delta_circle_with_3_delta() {
-        let (game, attacker_id) = create_test_game_with_delta_pokemon(3);
+        let (mut game, attacker_id) = create_test_game_with_delta_pokemon(3);
         let bonus = delta_circle_bonus(&game, attacker_id);
         assert_eq!(bonus, 30, "With 3 delta Pokemon, bonus should be 30, got {}", bonus);
     }
 
     #[test]
     fn eval_delta_circle_with_5_delta() {
-        let (game, attacker_id) = create_test_game_with_delta_pokemon(5);
+        let (mut game, attacker_id) = create_test_game_with_delta_pokemon(5);
         let bonus = delta_circle_bonus(&game, attacker_id);
         assert_eq!(bonus, 50, "With 5 delta Pokemon, bonus should be 50, got {}", bonus);
     }

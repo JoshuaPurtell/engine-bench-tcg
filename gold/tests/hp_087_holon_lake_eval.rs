@@ -107,7 +107,7 @@ mod eval_tests {
     #[test]
     fn eval_is_holon_lake_in_play_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = is_holon_lake_in_play(&game);
         assert!(!result, "is_holon_lake_in_play should return false with basic game state");
     }
@@ -115,7 +115,7 @@ mod eval_tests {
     #[test]
     fn eval_can_use_delta_draw_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = can_use_delta_draw(&game, attacker_id);
         assert!(!result, "can_use_delta_draw should return false with basic game state");
     }

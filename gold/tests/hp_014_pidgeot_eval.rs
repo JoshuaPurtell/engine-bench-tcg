@@ -244,14 +244,14 @@ mod eval_tests {
 
     #[test]
     fn eval_is_delta_reserve_active_false_without_holon_energy() {
-        let (game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
+        let (mut game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
         let result = is_delta_reserve_active(&game, pidgeot_id);
         assert!(!result, "Delta Reserve should NOT be active without Holon Energy attached");
     }
 
     #[test]
     fn eval_is_delta_reserve_active_true_with_holon_energy() {
-        let (game, pidgeot_id, _) = create_test_game_with_holon_energy(true);
+        let (mut game, pidgeot_id, _) = create_test_game_with_holon_energy(true);
         let result = is_delta_reserve_active(&game, pidgeot_id);
         assert!(result, "Delta Reserve should be active when Holon Energy is attached");
     }
@@ -262,14 +262,14 @@ mod eval_tests {
 
     #[test]
     fn eval_is_holon_energy_true_for_holon_energy_ff() {
-        let (game, _, holon_energy_id) = create_test_game_with_holon_energy(true);
+        let (mut game, _, holon_energy_id) = create_test_game_with_holon_energy(true);
         let result = is_holon_energy(&game, holon_energy_id.unwrap());
         assert!(result, "is_holon_energy should return true for Holon Energy FF");
     }
 
     #[test]
     fn eval_is_holon_energy_false_for_pokemon() {
-        let (game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
+        let (mut game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
         let result = is_holon_energy(&game, pidgeot_id);
         assert!(!result, "is_holon_energy should return false for Pokemon cards");
     }
@@ -280,7 +280,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_power_delta_pokemon_allowed() {
-        let (game, pidgeot_id, delta_id, _) = create_test_game_with_delta_and_non_delta();
+        let (mut game, pidgeot_id, delta_id, _) = create_test_game_with_delta_and_non_delta();
         // Delta Pokemon should always be able to use Poke-Powers
         let result = can_use_power_under_delta_reserve(&game, pidgeot_id, delta_id);
         assert!(result, "Delta Pokemon should be able to use Poke-Powers under Delta Reserve");
@@ -288,7 +288,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_power_non_delta_blocked() {
-        let (game, pidgeot_id, _, non_delta_id) = create_test_game_with_delta_and_non_delta();
+        let (mut game, pidgeot_id, _, non_delta_id) = create_test_game_with_delta_and_non_delta();
         // Non-delta Pokemon should NOT be able to use Poke-Powers when Delta Reserve is active
         let result = can_use_power_under_delta_reserve(&game, pidgeot_id, non_delta_id);
         assert!(!result, "Non-delta Pokemon should NOT be able to use Poke-Powers under Delta Reserve");
@@ -296,7 +296,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_power_non_delta_allowed_when_inactive() {
-        let (game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
+        let (mut game, pidgeot_id, _) = create_test_game_with_holon_energy(false);
         // When Delta Reserve is not active, all Pokemon can use Poke-Powers
         let result = can_use_power_under_delta_reserve(&game, pidgeot_id, pidgeot_id);
         assert!(result, "All Pokemon should be able to use Poke-Powers when Delta Reserve is not active");

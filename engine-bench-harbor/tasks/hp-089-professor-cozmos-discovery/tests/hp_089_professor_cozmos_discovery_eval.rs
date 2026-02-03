@@ -102,7 +102,7 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_professor_cozmos_discovery_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_professor_cozmos_discovery(&mut game, PlayerId::P1);
     }
 }

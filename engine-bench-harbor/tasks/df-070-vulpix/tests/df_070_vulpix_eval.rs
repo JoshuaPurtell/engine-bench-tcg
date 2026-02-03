@@ -421,7 +421,7 @@ mod behavioral_tests {
     
     #[test]
     fn eval_scratch_damage() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(scratch_damage(&game, attacker_id), 10);
     }
 

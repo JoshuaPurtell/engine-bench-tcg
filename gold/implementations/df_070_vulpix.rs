@@ -53,6 +53,13 @@ pub fn confuse_ray_effect(
     }
 }
 
+/// Hypnotic Gaze inflicts Asleep condition.
+pub fn hypnotic_gaze_condition() -> tcg_rules_ex::SpecialCondition {
+    tcg_rules_ex::SpecialCondition::Asleep
+}
+
+pub const ATTACK_1_TEXT: &str = "The Defending Pokémon is now Asleep.";
+
 // ============================================================================
 // Tests
 // ============================================================================

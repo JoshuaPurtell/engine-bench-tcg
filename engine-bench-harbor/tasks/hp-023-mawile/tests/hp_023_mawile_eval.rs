@@ -103,7 +103,7 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_call_for_family_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_call_for_family(&mut game, attacker_id);
     }
 }

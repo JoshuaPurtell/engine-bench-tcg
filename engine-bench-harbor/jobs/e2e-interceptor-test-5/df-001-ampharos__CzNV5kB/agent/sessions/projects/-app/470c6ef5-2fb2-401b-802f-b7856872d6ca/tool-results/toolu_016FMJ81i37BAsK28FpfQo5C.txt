@@ -1,0 +1,3122 @@
+     1→//! Dragon Frontiers expansion runtime hooks.
+     2→
+     3→use rand_core::RngCore;
+     4→use tcg_core::runtime_hooks::{def_id_matches, AttackOverrides};
+     5→
+     6→// Import per-card modules
+     7→use super::cards::df_007_nidoqueen;
+     8→use tcg_core::{
+     9→    Attack, AttackSelector, CardDefId, CardInstance, CardInstanceId, EffectAst,
+    10→    EnergyAttachmentSource, GameState, Marker, PlayerId, PokemonSelector, PokemonSlot, Prompt,
+    11→    Restriction, RestrictionKind, RestrictionTarget, SelectionDestination, Stage, StatModifierEntry,
+    12→    StatModifierKind, StatModifierValue, TriggerEvent, TriggerKind, TriggerPredicate,
+    13→    TriggerSubscription, Type,
+    14→};
+    15→use tcg_rules_ex::{Phase, SpecialCondition};
+    16→
+    17→pub fn attack_overrides(
+    18→    game: &GameState,
+    19→    _attack: &Attack,
+    20→    attacker_id: CardInstanceId,
+    21→    defender_id: CardInstanceId,
+    22→) -> AttackOverrides {
+    23→    let mut overrides = AttackOverrides::default();
+    24→    let attacker = match game.current_player().find_pokemon(attacker_id) {
+    25→        Some(slot) => slot,
+    26→        None => return overrides,
+    27→    };
+    28→    let defender = match game.opponent_player().find_pokemon(defender_id) {
+    29→        Some(slot) => slot,
+    30→        None => return overrides,
+    31→    };
+    32→
+    33→    if game.pokemon_is_delta(attacker_id) && player_has_feraligatr_battle_aura(game, attacker_id) {
+    34→        overrides.pre_weakness_modifier += 10;
+    35→    }
+    36→
+    37→    if holon_legacy_in_play(game) && game.pokemon_is_delta(defender_id) {
+    38→        overrides.ignore_weakness = true;
+    39→    }
+    40→
+    41→    if defender.is_ex == false
+    42→        && has_holon_energy(game, defender, 84)
+    43→        && has_basic_energy_of_type(game, defender, Type::Fire)
+    44→    {
+    45→        overrides.ignore_weakness = true;
+    46→    }
+    47→
+    48→    if attacker.is_ex == false
+    49→        && has_holon_energy(game, attacker, 84)
+    50→        && has_basic_energy_of_type(game, attacker, Type::Fighting)
+    51→    {
+    52→        overrides.ignore_resistance = true;
+    53→    }
+    54→
+    55→    if defender.is_ex == false
+    56→        && attacker.is_ex
+    57→        && has_holon_energy(game, defender, 85)
+    58→        && has_basic_energy_of_type(game, defender, Type::Lightning)
+    59→    {
+    60→        overrides.damage_modifier -= 10;
+    61→    }
+    62→
+    63→    // Heracross δ (DF-3) Shining Horn:
+    64→    // If Heracross is Active and has no Benched Pokémon, prevent all damage done to it by Basic Pokémon.
+    65→    if def_id_matches(&defender.card.def_id, "DF", 3)
+    66→        && attacker.stage == Stage::Basic
+    67→        && game.opponent_player().bench.is_empty()
+    68→        && body_active(game, defender.card.id)
+    69→    {
+    70→        overrides.prevent_damage = true;
+    71→    }
+    72→
+    73→    if def_id_matches(&defender.card.def_id, "DF", 9)
+    74→        && game.current_player().hand.count() >= 5
+    75→        && body_active(game, defender.card.id)
+    76→    {
+    77→        overrides.damage_modifier -= 30;
+    78→    }
+    79→
+    80→    if def_id_matches(&defender.card.def_id, "DF", 15)
+    81→        && game.pokemon_is_delta(attacker_id)
+    82→        && body_active(game, defender.card.id)
+    83→    {
+    84→        overrides.damage_modifier -= 40;
+    85→    }
+    86→
+    87→    if defender.is_ex
+    88→        && defender.stage == Stage::Stage2
+    89→        && player_has_kingdra_extra_smoke(game, defender_id)
+    90→    {
+    91→        overrides.pre_weakness_modifier -= 10;
+    92→    }
+    93→
+    94→    if attacker.is_ex
+    95→        && attacker.stage == Stage::Stage2
+    96→        && player_has_xatu_extra_feather(game, attacker_id)
+    97→    {
+    98→        overrides.pre_weakness_modifier += 10;
+    99→    }
+   100→
+   101→    if def_id_matches(&attacker.card.def_id, "DF", 1) && _attack.name == "Delta Circle" {
+   102→        let count = count_delta_pokemon_in_play(game, attacker_id);
+   103→        if count > 0 {
+   104→            overrides.pre_weakness_modifier += (count as i32) * 10;
+   105→        }
+   106→    }
+   107→
+   108→    if def_id_matches(&attacker.card.def_id, "DF", 3)
+   109→        && _attack.name == "Extra Claws"
+   110→        && defender.is_ex
+   111→    {
+   112→        overrides.pre_weakness_modifier += 20;
+   113→    }
+   114→
+   115→    // DF-7 Nidoqueen: Vengeance attack
+   116→    if def_id_matches(&attacker.card.def_id, "DF", 7) && _attack.name == "Vengeance" {
+   117→        overrides.pre_weakness_modifier += df_007_nidoqueen::vengeance_bonus(game, attacker_id);
+   118→    }
+   119→
+   120→    if def_id_matches(&attacker.card.def_id, "DF", 15)
+   121→        && _attack.name == "Surge"
+   122→        && count_energy_of_type(game, attacker, Type::Water) >= 2
+   123→    {
+   124→        overrides.pre_weakness_modifier += 20;
+   125→    }
+   126→
+   127→    if def_id_matches(&attacker.card.def_id, "DF", 16)
+   128→        && _attack.name == "Tail Sting"
+   129→        && defender.is_ex
+   130→    {
+   131→        overrides.pre_weakness_modifier += 10;
+   132→    }
+   133→
+   134→    if def_id_matches(&attacker.card.def_id, "DF", 21)
+   135→        && _attack.name == "Pump Out"
+   136→        && has_any_tool(attacker)
+   137→    {
+   138→        overrides.pre_weakness_modifier += 20;
+   139→    }
+   140→
+   141→    if def_id_matches(&attacker.card.def_id, "DF", 23) && _attack.name == "Grind" {
+   142→        let total = count_total_energy(attacker) as i32 * 10;
+   143→        let modifier = total - _attack.damage as i32;
+   144→        if modifier != 0 {
+   145→            overrides.pre_weakness_modifier += modifier;
+   146→        }
+   147→    }
+   148→
+   149→    if def_id_matches(&attacker.card.def_id, "DF", 98)
+   150→        && _attack.name == "Dual Stream"
+   151→        && game.has_marker(attacker_id, "Dual Stream Reduced")
+   152→    {
+   153→        overrides.pre_weakness_modifier -= 40;
+   154→    }
+   155→
+   156→    if def_id_matches(&attacker.card.def_id, "DF", 32) && _attack.name == "Link Blast" {
+   157→        let attacker_energy = count_total_energy(attacker);
+   158→        let defender_energy = count_total_energy(defender);
+   159→        if attacker_energy != defender_energy {
+   160→            overrides.pre_weakness_modifier -= 30;
+   161→        }
+   162→    }
+   163→
+   164→    if def_id_matches(&attacker.card.def_id, "DF", 35) && _attack.name == "Rage" {
+   165→        let bonus = attacker.damage_counters as i32 * 10;
+   166→        if bonus > 0 {
+   167→            overrides.pre_weakness_modifier += bonus;
+   168→        }
+   169→    }
+   170→
+   171→    if def_id_matches(&attacker.card.def_id, "DF", 37)
+   172→        && _attack.name == "Extra Ball"
+   173→        && defender.is_ex
+   174→    {
+   175→        overrides.pre_weakness_modifier += 30;
+   176→    }
+   177→
+   178→    if def_id_matches(&attacker.card.def_id, "DF", 39)
+   179→        && _attack.name == "Flickering Tail"
+   180→        && defender.is_ex
+   181→    {
+   182→        overrides.pre_weakness_modifier += 10;
+   183→    }
+   184→
+   185→    if def_id_matches(&attacker.card.def_id, "DF", 49) && _attack.name == "Flail" {
+   186→        let bonus = attacker.damage_counters as i32 * 10;
+   187→        if bonus > 0 {
+   188→            overrides.pre_weakness_modifier += bonus;
+   189→        }
+   190→    }
+   191→
+   192→    if def_id_matches(&attacker.card.def_id, "DF", 60) && _attack.name == "Psychic Boom" {
+   193→        let bonus = defender.attached_energy.len() as i32 * 10;
+   194→        if bonus > 0 {
+   195→            overrides.pre_weakness_modifier += bonus;
+   196→        }
+   197→    }
+   198→
+   199→    if def_id_matches(&attacker.card.def_id, "DF", 65) && _attack.name == "Splash About" {
+   200→        let attacker_energy = count_total_energy(attacker);
+   201→        let defender_energy = count_total_energy(defender);
+   202→        if attacker_energy < defender_energy {
+   203→            overrides.pre_weakness_modifier += 10;
+   204→        }
+   205→    }
+   206→
+   207→    if def_id_matches(&attacker.card.def_id, "DF", 99)
+   208→        && _attack.name == "Hyper Claws"
+   209→        && defender.stage == Stage::Stage2
+   210→    {
+   211→        overrides.pre_weakness_modifier += 20;
+   212→    }
+   213→
+   214→    if game.has_marker(attacker_id, "Delta Reduction") {
+   215→        overrides.pre_weakness_modifier -= 30;
+   216→    }
+   217→
+   218→    if game.has_marker(attacker_id, "Charm") {
+   219→        overrides.pre_weakness_modifier -= 20;
+   220→    }
+   221→
+   222→    if game.has_marker(defender_id, "Granite Head") {
+   223→        overrides.damage_modifier -= 10;
+   224→    }
+   225→
+   226→    if game.has_marker(defender_id, "Protective Swirl") {
+   227→        overrides.ignore_weakness = true;
+   228→    }
+   229→
+   230→    overrides
+   231→}
+   232→
+   233→#[allow(dead_code)]
+   234→pub fn attack_blocked_by_shining_horn(game: &GameState, attacker_id: CardInstanceId) -> bool {
+   235→    let attacker = match game.current_player().find_pokemon(attacker_id) {
+   236→        Some(slot) => slot,
+   237→        None => return false,
+   238→    };
+   239→    if attacker.stage != Stage::Basic {
+   240→        return false;
+   241→    }
+   242→    let opponent = game.opponent_player();
+   243→    let active = match opponent.active.as_ref() {
+   244→        Some(slot) => slot,
+   245→        None => return false,
+   246→    };
+   247→    if !def_id_matches(&active.card.def_id, "DF", 3) {
+   248→        return false;
+   249→    }
+   250→    opponent.bench.is_empty()
+   251→}
+   252→
+   253→pub fn post_attack(
+   254→    _game: &mut GameState,
+   255→    _attacker_id: CardInstanceId,
+   256→    _defender_id: CardInstanceId,
+   257→    _damage_dealt: u16,
+   258→) {
+   259→}
+   260→
+   261→pub fn between_turns(game: &mut GameState) {
+   262→    let sleeping_snorlax = [
+   263→        (&game.players[0], PlayerId::P1),
+   264→        (&game.players[1], PlayerId::P2),
+   265→    ]
+   266→    .into_iter()
+   267→    .filter_map(|(player, id)| {
+   268→        let active = player.active.as_ref()?;
+   269→        if def_id_matches(&active.card.def_id, "DF", 10)
+   270→            && active.has_special_condition(SpecialCondition::Asleep)
+   271→        {
+   272→            Some(id)
+   273→        } else {
+   274→            None
+   275→        }
+   276→    })
+   277→    .collect::<Vec<_>>();
+   278→
+   279→    for sleeping_owner in sleeping_snorlax {
+   280→        let opponent = match sleeping_owner {
+   281→            PlayerId::P1 => PlayerId::P2,
+   282→            PlayerId::P2 => PlayerId::P1,
+   283→        };
+   284→        game.deal_between_turns_damage(opponent, 20);
+   285→    }
+   286→
+   287→    discard_boost_energy(game);
+   288→}
+   289→
+   290→pub fn execute_power(game: &mut GameState, power_name: &str, source_id: CardInstanceId) -> bool {
+   291→    match power_name {
+   292→        "Dozing" => execute_snorlax_dozing(game, source_id),
+   293→        "Sharing" => execute_sharing(game, source_id),
+   294→        "Invitation" => df_007_nidoqueen::execute_invitation(game, source_id),
+   295→        "Prowl" => execute_prowl(game, source_id),
+   296→        "Evolutionary Call" => execute_evolutionary_call(game, source_id),
+   297→        "Power Circulation" => execute_power_circulation(game, source_id),
+   298→        "Dig Up" => execute_dig_up(game, source_id),
+   299→        "Tropical Heal" => execute_tropical_heal(game, source_id),
+   300→        "Sand Damage" => execute_sand_damage(game, source_id),
+   301→        "Imprison" => execute_imprison(game, source_id),
+   302→        "Type Shift" => execute_type_shift(game, source_id),
+   303→        "Volunteer" => execute_volunteer(game, source_id),
+   304→        "Power of Evolution" => execute_power_of_evolution(game, source_id),
+   305→        "Baby Evolution" => execute_baby_evolution(game, source_id),
+   306→        "Extra Boost" => execute_extra_boost(game, source_id),
+   307→        "Fellow Boost" => execute_fellow_boost(game, source_id),
+   308→        "Shady Move" => execute_shady_move(game, source_id),
+   309→        "Copycat" => execute_copycat(game, source_id),
+   310→        "Island Hermit" => execute_island_hermit(game, source_id),
+   311→        "Holon Mentor" => execute_holon_mentor(game, source_id),
+   312→        "Mr. Stone's Project" => execute_mr_stone_project(game, source_id),
+   313→        "Old Rod" => execute_old_rod(game, source_id),
+   314→        "Professor Oak's Research" => execute_prof_oak_research(game, source_id),
+   315→        "Dark Horn" => execute_dark_horn(game, source_id),
+   316→        "Delta Copy" => execute_delta_copy(game, source_id),
+   317→        "Alluring Kiss" => execute_alluring_kiss(game, source_id),
+   318→        "Dragon Roar" => execute_dragon_roar(game, source_id),
+   319→        "Dual Stream" => execute_dual_stream(game, source_id),
+   320→        "Shock-wave" => execute_shock_wave(game, source_id),
+   321→        "Rotating Claws" => execute_rotating_claws(game, source_id),
+   322→        "Mimicry" => execute_mimicry(game, source_id),
+   323→        "Rainbow Wave" => execute_rainbow_wave(game, source_id),
+   324→        _ => false,
+   325→    }
+   326→}
+   327→
+   328→pub fn power_effect_id(def_id: &CardDefId, power_name: &str) -> Option<String> {
+   329→    if def_id_matches(def_id, "DF", 4) && power_name == "Evolutionary Call" {
+   330→        return Some("DF-4:Evolutionary Call".to_string());
+   331→    }
+   332→    if def_id_matches(def_id, "DF", 10) && power_name == "Dozing" {
+   333→        return Some("DF-10:Dozing".to_string());
+   334→    }
+   335→    if def_id_matches(def_id, "DF", 5) && power_name == "Sharing" {
+   336→        return Some("DF-5:Sharing".to_string());
+   337→    }
+   338→    if def_id_matches(def_id, "DF", 7) && power_name == "Invitation" {
+   339→        return Some(df_007_nidoqueen::invitation_effect_id());
+   340→    }
+   341→    if def_id_matches(def_id, "DF", 18) && power_name == "Prowl" {
+   342→        return Some("DF-18:Prowl".to_string());
+   343→    }
+   344→    if def_id_matches(def_id, "DF", 20) && power_name == "Power Circulation" {
+   345→        return Some("DF-20:Power Circulation".to_string());
+   346→    }
+   347→    if def_id_matches(def_id, "DF", 21) && power_name == "Dig Up" {
+   348→        return Some("DF-21:Dig Up".to_string());
+   349→    }
+   350→    if def_id_matches(def_id, "DF", 23) && power_name == "Tropical Heal" {
+   351→        return Some("DF-23:Tropical Heal".to_string());
+   352→    }
+   353→    if def_id_matches(def_id, "DF", 93) && power_name == "Imprison" {
+   354→        return Some("DF-93:Imprison".to_string());
+   355→    }
+   356→    if def_id_matches(def_id, "DF", 98) && power_name == "Type Shift" {
+   357→        return Some("DF-98:Type Shift".to_string());
+   358→    }
+   359→    if def_id_matches(def_id, "DF", 8) && power_name == "Volunteer" {
+   360→        return Some("DF-8:Volunteer".to_string());
+   361→    }
+   362→    if def_id_matches(def_id, "DF", 29) && power_name == "Power of Evolution" {
+   363→        return Some("DF-29:Power of Evolution".to_string());
+   364→    }
+   365→    if def_id_matches(def_id, "DF", 48) && power_name == "Baby Evolution" {
+   366→        return Some("DF-48:Baby Evolution".to_string());
+   367→    }
+   368→    if def_id_matches(def_id, "DF", 64) && power_name == "Baby Evolution" {
+   369→        return Some("DF-64:Baby Evolution".to_string());
+   370→    }
+   371→    if def_id_matches(def_id, "DF", 90) && power_name == "Extra Boost" {
+   372→        return Some("DF-90:Extra Boost".to_string());
+   373→    }
+   374→    if def_id_matches(def_id, "DF", 95) && power_name == "Fellow Boost" {
+   375→        return Some("DF-95:Fellow Boost".to_string());
+   376→    }
+   377→    if def_id_matches(def_id, "DF", 12) && power_name == "Shady Move" {
+   378→        return Some("DF-12:Shady Move".to_string());
+   379→    }
+   380→    None
+   381→}
+   382→
+   383→pub fn power_is_once_per_turn(def_id: &CardDefId, power_name: &str) -> bool {
+   384→    def_id_matches(def_id, "DF", 4) && power_name == "Evolutionary Call"
+   385→        || def_id_matches(def_id, "DF", 20) && power_name == "Power Circulation"
+   386→        || def_id_matches(def_id, "DF", 21) && power_name == "Dig Up"
+   387→        || def_id_matches(def_id, "DF", 5) && power_name == "Sharing"
+   388→        || def_id_matches(def_id, "DF", 93) && power_name == "Imprison"
+   389→        || def_id_matches(def_id, "DF", 98) && power_name == "Type Shift"
+   390→        || def_id_matches(def_id, "DF", 8) && power_name == "Volunteer"
+   391→        || def_id_matches(def_id, "DF", 29) && power_name == "Power of Evolution"
+   392→        || def_id_matches(def_id, "DF", 48) && power_name == "Baby Evolution"
+   393→        || def_id_matches(def_id, "DF", 64) && power_name == "Baby Evolution"
+   394→        || def_id_matches(def_id, "DF", 90) && power_name == "Extra Boost"
+   395→        || def_id_matches(def_id, "DF", 95) && power_name == "Fellow Boost"
+   396→        || def_id_matches(def_id, "DF", 12) && power_name == "Shady Move"
+   397→}
+   398→
+   399→pub fn apply_tool_stadium_effects(_game: &mut GameState) {}
+   400→
+   401→pub fn can_attach_tool(
+   402→    _game: &GameState,
+   403→    _player: PlayerId,
+   404→    _tool_id: CardInstanceId,
+   405→    _target_id: CardInstanceId,
+   406→) -> bool {
+   407→    true
+   408→}
+   409→
+   410→pub fn on_tool_attached(
+   411→    _game: &mut GameState,
+   412→    _tool_id: CardInstanceId,
+   413→    _target_id: CardInstanceId,
+   414→) {
+   415→}
+   416→
+   417→pub fn energy_provides_override(_game: &GameState, _card: &CardInstance) -> Option<Vec<Type>> {
+   418→    if def_id_matches(&_card.def_id, "DF", 88) {
+   419→        if let Some(slot) = attached_slot_for_energy(_game, _card.id) {
+   420→            if slot.is_delta {
+   421→                return Some(all_energy_types());
+   422→            }
+   423→        }
+   424→        return Some(vec![Type::Colorless]);
+   425→    }
+   426→    if def_id_matches(&_card.def_id, "DF", 89) {
+   427→        if let Some(slot) = attached_slot_for_energy(_game, _card.id) {
+   428→            if scramble_energy_active(_game, slot) {
+   429→                return Some(all_energy_types());
+   430→            }
+   431→        }
+   432→        return Some(vec![Type::Colorless]);
+   433→    }
+   434→    if def_id_matches(&_card.def_id, "DF", 87) {
+   435→        return Some(vec![Type::Colorless]);
+   436→    }
+   437→    None
+   438→}
+   439→
+   440→pub fn on_energy_attached(
+   441→    game: &mut GameState,
+   442→    energy_id: CardInstanceId,
+   443→    target_id: CardInstanceId,
+   444→    _source: EnergyAttachmentSource,
+   445→) {
+   446→    let slot = match game
+   447→        .players
+   448→        .iter_mut()
+   449→        .find_map(|player| player.find_pokemon_mut(target_id))
+   450→    {
+   451→        Some(slot) => slot,
+   452→        None => return,
+   453→    };
+   454→    let energy_def_id = slot
+   455→        .attached_energy
+   456→        .iter()
+   457→        .find(|energy| energy.id == energy_id)
+   458→        .map(|energy| energy.def_id.clone());
+   459→    let Some(energy_def_id) = energy_def_id else {
+   460→        return;
+   461→    };
+   462→    if def_id_matches(&energy_def_id, "DF", 87) {
+   463→        if slot.stage == Stage::Basic {
+   464→            discard_attached_energy(game, target_id, energy_id);
+   465→            return;
+   466→        }
+   467→        let mut marker = Marker::new("Boost Energy");
+   468→        marker.source = Some(energy_id);
+   469→        marker.expires_after_turn = Some(game.turn.number);
+   470→        slot.markers.push(marker);
+   471→    }
+   472→    if def_id_matches(&energy_def_id, "DF", 89) {
+   473→        if slot.stage == Stage::Basic || slot.is_ex {
+   474→            discard_attached_energy(game, target_id, energy_id);
+   475→        }
+   476→    }
+   477→}
+   478→
+   479→pub fn after_attack(
+   480→    game: &mut GameState,
+   481→    attacker_id: CardInstanceId,
+   482→    _defender_id: CardInstanceId,
+   483→) {
+   484→    game.remove_marker(attacker_id, "Dual Stream Reduced");
+   485→}
+   486→
+   487→pub fn can_use_pokepower_override(
+   488→    _game: &GameState,
+   489→    _player: PlayerId,
+   490→    _pokemon_id: CardInstanceId,
+   491→) -> Option<bool> {
+   492→    if holon_legacy_in_play(_game) && _game.pokemon_is_delta(_pokemon_id) {
+   493→        return Some(false);
+   494→    }
+   495→    None
+   496→}
+   497→
+   498→pub fn is_pokebody_active_override(
+   499→    _game: &GameState,
+   500→    _player: PlayerId,
+   501→    _pokemon_id: CardInstanceId,
+   502→) -> Option<bool> {
+   503→    None
+   504→}
+   505→
+   506→pub fn register_triggers(game: &mut GameState, slot: &PokemonSlot) {
+   507→    if def_id_matches(&slot.card.def_id, "DF", 4) {
+   508→        let effect_id = "DF-4:Evolutionary Call".to_string();
+   509→        game.register_trigger(TriggerSubscription {
+   510→            source_id: slot.card.id,
+   511→            trigger: TriggerKind::OnEvolveFromHand,
+   512→            predicate: TriggerPredicate::Always,
+   513→            effect_id,
+   514→            match_subject: true,
+   515→        });
+   516→    }
+   517→    if def_id_matches(&slot.card.def_id, "DF", 18) {
+   518→        let effect_id = "DF-18:Prowl".to_string();
+   519→        game.register_trigger(TriggerSubscription {
+   520→            source_id: slot.card.id,
+   521→            trigger: TriggerKind::OnEvolveFromHand,
+   522→            predicate: TriggerPredicate::Always,
+   523→            effect_id: effect_id.clone(),
+   524→            match_subject: true,
+   525→        });
+   526→    }
+   527→    if def_id_matches(&slot.card.def_id, "DF", 21) {
+   528→        let effect_id = "DF-21:Dig Up".to_string();
+   529→        game.register_trigger(TriggerSubscription {
+   530→            source_id: slot.card.id,
+   531→            trigger: TriggerKind::OnEvolveFromHand,
+   532→            predicate: TriggerPredicate::Always,
+   533→            effect_id,
+   534→            match_subject: true,
+   535→        });
+   536→    }
+   537→    if def_id_matches(&slot.card.def_id, "DF", 23) {
+   538→        let effect_id = "DF-23:Tropical Heal".to_string();
+   539→        game.register_trigger(TriggerSubscription {
+   540→            source_id: slot.card.id,
+   541→            trigger: TriggerKind::OnBenchFromHand,
+   542→            predicate: TriggerPredicate::Always,
+   543→            effect_id,
+   544→            match_subject: true,
+   545→        });
+   546→    }
+   547→    if def_id_matches(&slot.card.def_id, "DF", 92) {
+   548→        let effect_id = "DF-92:Sand Damage".to_string();
+   549→        game.register_trigger(TriggerSubscription {
+   550→            source_id: slot.card.id,
+   551→            trigger: TriggerKind::BetweenTurns,
+   552→            predicate: TriggerPredicate::Always,
+   553→            effect_id,
+   554→            match_subject: true,
+   555→        });
+   556→    }
+   557→    if def_id_matches(&slot.card.def_id, "DF", 14) {
+   558→        apply_bench_damage_prevention(game, slot);
+   559→    }
+   560→    if def_id_matches(&slot.card.def_id, "DF", 24) {
+   561→        apply_psychic_wing(game, slot);
+   562→    }
+   563→    if def_id_matches(&slot.card.def_id, "DF", 40) {
+   564→        apply_extra_wing(game, slot);
+   565→    }
+   566→    if def_id_matches(&slot.card.def_id, "DF", 96) {
+   567→        apply_link_wing(game, slot);
+   568→    }
+   569→    if def_id_matches(&slot.card.def_id, "DF", 17) {
+   570→        apply_stages_of_evolution(game, slot);
+   571→    }
+   572→}
+   573→
+   574→pub fn resolve_custom_prompt(
+   575→    game: &mut GameState,
+   576→    effect_id: &str,
+   577→    source_id: Option<CardInstanceId>,
+   578→    target_ids: &[CardInstanceId],
+   579→) -> bool {
+   580→    if let Some(tail) = effect_id.strip_prefix("DF-11:Delta Copy:Attack:") {
+   581→        return resolve_delta_copy_attack(game, tail, source_id);
+   582→    }
+   583→    if let Some(tail) = effect_id.strip_prefix("DF-101:Mimicry:Attack:") {
+   584→        return resolve_mimicry_attack(game, tail, source_id);
+   585→    }
+   586→    if let Some(tail) = effect_id.strip_prefix("DF-91:Dragon Roar:") {
+   587→        return resolve_dragon_roar_overflow(game, tail, target_ids);
+   588→    }
+   589→    if let Some(tail) = effect_id.strip_prefix("DF-100:Rotating Claws:Energy:") {
+   590→        return resolve_rotating_claws_energy(game, tail, source_id, target_ids);
+   591→    }
+   592→    match effect_id {
+   593→        "DF-20:Power Circulation" => resolve_power_circulation(game, source_id),
+   594→        "DF-5:Sharing" => resolve_sharing(game, source_id, target_ids),
+   595→        "DF-93:Imprison" => resolve_imprison(game, source_id, target_ids),
+   596→        "DF-12:Shady Move" => resolve_shady_move(game, target_ids),
+   597→        "DF-8:Volunteer" => resolve_volunteer(game, source_id, target_ids),
+   598→        "DF-90:Extra Boost" => resolve_extra_boost(game, source_id, target_ids),
+   599→        "DF-95:Fellow Boost" => resolve_fellow_boost(game, source_id, target_ids),
+   600→        "DF-76:Island Hermit" => resolve_island_hermit(game, source_id),
+   601→        "DF-75:Holon Mentor:Discard" => resolve_holon_mentor_discard(game, source_id, target_ids),
+   602→        "DF-75:Holon Mentor:Deck" => true,
+   603→        "DF-77:Mr. Stone's Project:Discard" => {
+   604→            resolve_mr_stone_project_discard(game, source_id, target_ids)
+   605→        }
+   606→        "DF-77:Mr. Stone's Project:Deck" => true,
+   607→        "DF-78:Old Rod:Pokemon" => true,
+   608→        "DF-78:Old Rod:Trainer" => true,
+   609→        "DF-6:Dark Horn" => resolve_dark_horn(game, source_id, target_ids),
+   610→        "DF-6:Dark Horn:Bench" => resolve_dark_horn_bench(game, source_id, target_ids),
+   611→        "DF-11:Delta Copy:Target" => resolve_delta_copy_target(game, source_id, target_ids),
+   612→        "DF-64:Alluring Kiss:Pokemon" => resolve_alluring_kiss_pokemon(game, source_id, target_ids),
+   613→        "DF-64:Alluring Kiss:Energy" => resolve_alluring_kiss_energy(game, source_id, target_ids),
+   614→        "DF-91:Dragon Roar" => resolve_dragon_roar(game, source_id),
+   615→        "DF-98:Dual Stream:Bench" => resolve_dual_stream_bench(game, source_id, target_ids),
+   616→        "DF-99:Shock-wave" => resolve_shock_wave(game, source_id, target_ids),
+   617→        "DF-100:Rotating Claws:Discard" => {
+   618→            resolve_rotating_claws_discard(game, source_id, target_ids)
+   619→        }
+   620→        "DF-100:Rotating Claws" => resolve_rotating_claws(game, source_id),
+   621→        "DF-101:Mimicry:Target" => resolve_mimicry_target(game, source_id, target_ids),
+   622→        "DF-101:Rainbow Wave" => resolve_rainbow_wave(game, source_id, target_ids),
+   623→        _ => false,
+   624→    }
+   625→}
+   626→
+   627→fn execute_copycat(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   628→    let owner = match owner_for_source(game, source_id) {
+   629→        Some(player) => player,
+   630→        None => return false,
+   631→    };
+   632→    let owner_index = match owner {
+   633→        PlayerId::P1 => 0,
+   634→        PlayerId::P2 => 1,
+   635→    };
+   636→    let opponent_index = 1 - owner_index;
+   637→    let opponent_hand_count = game.players[opponent_index].hand.count();
+   638→    let hand_ids = game.players[owner_index].hand.order();
+   639→    for card_id in hand_ids {
+   640→        if let Some(card) = game.players[owner_index].hand.remove(card_id) {
+   641→            game.players[owner_index].deck.add(card);
+   642→        }
+   643→    }
+   644→    let seed = game.rng.next_u64();
+   645→    game.players[owner_index].shuffle_deck(seed);
+   646→    let _ = game.draw_cards_with_events(owner, opponent_hand_count);
+   647→    true
+   648→}
+   649→
+   650→fn execute_island_hermit(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   651→    let owner = match owner_for_source(game, source_id) {
+   652→        Some(player) => player,
+   653→        None => return false,
+   654→    };
+   655→    let owner_index = match owner {
+   656→        PlayerId::P1 => 0,
+   657→        PlayerId::P2 => 1,
+   658→    };
+   659→    let options = game.players[owner_index].prizes.order();
+   660→    if options.is_empty() {
+   661→        return false;
+   662→    }
+   663→    let prompt = Prompt::ChoosePrizeCards {
+   664→        player: owner,
+   665→        options,
+   666→        min: 0,
+   667→        max: 2,
+   668→    };
+   669→    game.set_pending_prompt_custom(prompt, owner, "DF-76:Island Hermit".to_string(), Some(source_id));
+   670→    true
+   671→}
+   672→
+   673→fn execute_holon_mentor(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   674→    let owner = match owner_for_source(game, source_id) {
+   675→        Some(player) => player,
+   676→        None => return false,
+   677→    };
+   678→    let owner_index = match owner {
+   679→        PlayerId::P1 => 0,
+   680→        PlayerId::P2 => 1,
+   681→    };
+   682→    let hand_ids = game.players[owner_index].hand.order();
+   683→    if hand_ids.is_empty() {
+   684→        return false;
+   685→    }
+   686→    let prompt = Prompt::ChooseCardsFromHand {
+   687→        player: owner,
+   688→        count: 1,
+   689→        options: hand_ids,
+   690→        min: Some(1),
+   691→        max: Some(1),
+   692→        return_to_deck: false,
+   693→    };
+   694→    game.set_pending_prompt_custom(prompt, owner, "DF-75:Holon Mentor:Discard".to_string(), Some(source_id));
+   695→    true
+   696→}
+   697→
+   698→fn resolve_holon_mentor_discard(
+   699→    game: &mut GameState,
+   700→    source_id: Option<CardInstanceId>,
+   701→    target_ids: &[CardInstanceId],
+   702→) -> bool {
+   703→    let source_id = match source_id {
+   704→        Some(id) => id,
+   705→        None => return false,
+   706→    };
+   707→    if target_ids.len() != 1 {
+   708→        return false;
+   709→    }
+   710→    let owner = match owner_for_source(game, source_id) {
+   711→        Some(player) => player,
+   712→        None => return false,
+   713→    };
+   714→    let owner_index = match owner {
+   715→        PlayerId::P1 => 0,
+   716→        PlayerId::P2 => 1,
+   717→    };
+   718→    if let Some(card) = game.players[owner_index].hand.remove(target_ids[0]) {
+   719→        game.players[owner_index].discard.add(card);
+   720→    } else {
+   721→        return false;
+   722→    }
+   723→
+   724→    let matching_cards: Vec<_> = game.players[owner_index]
+   725→        .deck
+   726→        .cards()
+   727→        .iter()
+   728→        .filter(|card| {
+   729→            game.card_meta
+   730→                .get(&card.def_id)
+   731→                .map(|meta| meta.is_pokemon && meta.is_basic && meta.hp <= 100)
+   732→                .unwrap_or(false)
+   733→        })
+   734→        .cloned()
+   735→        .collect();
+   736→    if matching_cards.is_empty() {
+   737→        return true;
+   738→    }
+   739→    let options: Vec<_> = matching_cards.iter().map(|card| card.id).collect();
+   740→    let revealed_cards = matching_cards
+   741→        .iter()
+   742→        .map(|card| tcg_core::RevealedCard {
+   743→            id: card.id,
+   744→            def_id: card.def_id.as_str().to_string(),
+   745→            name: game
+   746→                .card_meta
+   747→                .get(&card.def_id)
+   748→                .map(|meta| meta.name.clone())
+   749→                .unwrap_or_else(|| card.def_id.as_str().to_string()),
+   750→        })
+   751→        .collect();
+   752→    let prompt = Prompt::ChooseCardsFromDeck {
+   753→        player: owner,
+   754→        count: 3,
+   755→        options,
+   756→        revealed_cards,
+   757→        min: Some(0),
+   758→        max: Some(3),
+   759→        destination: SelectionDestination::Hand,
+   760→        shuffle: true,
+   761→    };
+   762→    game.set_pending_prompt_custom(prompt, owner, "DF-75:Holon Mentor:Deck".to_string(), Some(source_id));
+   763→    true
+   764→}
+   765→
+   766→fn resolve_island_hermit(game: &mut GameState, source_id: Option<CardInstanceId>) -> bool {
+   767→    let owner = match source_id.and_then(|id| owner_for_source(game, id)) {
+   768→        Some(player) => player,
+   769→        None => return false,
+   770→    };
+   771→    match owner {
+   772→        PlayerId::P1 => {
+   773→            game.players[0].draw(2);
+   774→        }
+   775→        PlayerId::P2 => {
+   776→            game.players[1].draw(2);
+   777→        }
+   778→    }
+   779→    true
+   780→}
+   781→
+   782→fn execute_prof_oak_research(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   783→    let owner = match owner_for_source(game, source_id) {
+   784→        Some(player) => player,
+   785→        None => return false,
+   786→    };
+   787→    let owner_index = match owner {
+   788→        PlayerId::P1 => 0,
+   789→        PlayerId::P2 => 1,
+   790→    };
+   791→    let hand_ids = game.players[owner_index].hand.order();
+   792→    for card_id in hand_ids {
+   793→        if let Some(card) = game.players[owner_index].hand.remove(card_id) {
+   794→            game.players[owner_index].deck.add(card);
+   795→        }
+   796→    }
+   797→    let seed = game.rng.next_u64();
+   798→    game.players[owner_index].shuffle_deck(seed);
+   799→    let _ = game.draw_cards_with_events(owner, 5);
+   800→    true
+   801→}
+   802→
+   803→fn execute_mr_stone_project(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   804→    let owner = match owner_for_source(game, source_id) {
+   805→        Some(player) => player,
+   806→        None => return false,
+   807→    };
+   808→    let owner_index = match owner {
+   809→        PlayerId::P1 => 0,
+   810→        PlayerId::P2 => 1,
+   811→    };
+   812→    let discard_options: Vec<_> = game.players[owner_index]
+   813→        .discard
+   814→        .cards()
+   815→        .iter()
+   816→        .filter(|card| {
+   817→            game.card_meta
+   818→                .get(&card.def_id)
+   819→                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+   820→                .unwrap_or(false)
+   821→        })
+   822→        .map(|card| card.id)
+   823→        .collect();
+   824→    if !discard_options.is_empty() {
+   825→        let prompt = Prompt::ChooseCardsFromDiscard {
+   826→            player: owner,
+   827→            count: 2,
+   828→            options: discard_options,
+   829→            min: Some(0),
+   830→            max: Some(2),
+   831→            destination: SelectionDestination::Hand,
+   832→        };
+   833→        game.set_pending_prompt_custom(
+   834→            prompt,
+   835→            owner,
+   836→            "DF-77:Mr. Stone's Project:Discard".to_string(),
+   837→            Some(source_id),
+   838→        );
+   839→        return true;
+   840→    }
+   841→    prompt_mr_stone_deck(game, owner, source_id)
+   842→}
+   843→
+   844→fn resolve_mr_stone_project_discard(
+   845→    game: &mut GameState,
+   846→    source_id: Option<CardInstanceId>,
+   847→    target_ids: &[CardInstanceId],
+   848→) -> bool {
+   849→    if !target_ids.is_empty() {
+   850→        return true;
+   851→    }
+   852→    let owner = match source_id.and_then(|id| owner_for_source(game, id)) {
+   853→        Some(player) => player,
+   854→        None => return false,
+   855→    };
+   856→    let source_id = match source_id {
+   857→        Some(id) => id,
+   858→        None => return false,
+   859→    };
+   860→    prompt_mr_stone_deck(game, owner, source_id)
+   861→}
+   862→
+   863→fn prompt_mr_stone_deck(game: &mut GameState, owner: PlayerId, source_id: CardInstanceId) -> bool {
+   864→    let owner_index = match owner {
+   865→        PlayerId::P1 => 0,
+   866→        PlayerId::P2 => 1,
+   867→    };
+   868→    let matching_cards: Vec<_> = game.players[owner_index]
+   869→        .deck
+   870→        .cards()
+   871→        .iter()
+   872→        .filter(|card| {
+   873→            game.card_meta
+   874→                .get(&card.def_id)
+   875→                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+   876→                .unwrap_or(false)
+   877→        })
+   878→        .cloned()
+   879→        .collect();
+   880→    if matching_cards.is_empty() {
+   881→        return false;
+   882→    }
+   883→    let options: Vec<_> = matching_cards.iter().map(|card| card.id).collect();
+   884→    let revealed_cards = matching_cards
+   885→        .iter()
+   886→        .map(|card| tcg_core::RevealedCard {
+   887→            id: card.id,
+   888→            def_id: card.def_id.as_str().to_string(),
+   889→            name: game
+   890→                .card_meta
+   891→                .get(&card.def_id)
+   892→                .map(|meta| meta.name.clone())
+   893→                .unwrap_or_else(|| card.def_id.as_str().to_string()),
+   894→        })
+   895→        .collect();
+   896→    let prompt = Prompt::ChooseCardsFromDeck {
+   897→        player: owner,
+   898→        count: 2,
+   899→        options,
+   900→        revealed_cards,
+   901→        min: Some(0),
+   902→        max: Some(2),
+   903→        destination: SelectionDestination::Hand,
+   904→        shuffle: true,
+   905→    };
+   906→    game.set_pending_prompt_custom(
+   907→        prompt,
+   908→        owner,
+   909→        "DF-77:Mr. Stone's Project:Deck".to_string(),
+   910→        Some(source_id),
+   911→    );
+   912→    true
+   913→}
+   914→
+   915→fn execute_old_rod(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   916→    let owner = match owner_for_source(game, source_id) {
+   917→        Some(player) => player,
+   918→        None => return false,
+   919→    };
+   920→    let owner_index = match owner {
+   921→        PlayerId::P1 => 0,
+   922→        PlayerId::P2 => 1,
+   923→    };
+   924→    let mut heads = 0;
+   925→    if game.flip_coin() {
+   926→        heads += 1;
+   927→    }
+   928→    if game.flip_coin() {
+   929→        heads += 1;
+   930→    }
+   931→    if heads == 2 {
+   932→        let options: Vec<_> = game.players[owner_index]
+   933→            .discard
+   934→            .cards()
+   935→            .iter()
+   936→            .filter(|card| {
+   937→                game.card_meta
+   938→                    .get(&card.def_id)
+   939→                    .map(|meta| meta.is_pokemon)
+   940→                    .unwrap_or(false)
+   941→            })
+   942→            .map(|card| card.id)
+   943→            .collect();
+   944→        if options.is_empty() {
+   945→            return true;
+   946→        }
+   947→        let prompt = Prompt::ChooseCardsFromDiscard {
+   948→            player: owner,
+   949→            count: 1,
+   950→            options,
+   951→            min: Some(1),
+   952→            max: Some(1),
+   953→            destination: SelectionDestination::Hand,
+   954→        };
+   955→        game.set_pending_prompt_custom(prompt, owner, "DF-78:Old Rod:Pokemon".to_string(), Some(source_id));
+   956→        return true;
+   957→    }
+   958→    if heads == 0 {
+   959→        let options: Vec<_> = game.players[owner_index]
+   960→            .discard
+   961→            .cards()
+   962→            .iter()
+   963→            .filter(|card| {
+   964→                game.card_meta
+   965→                    .get(&card.def_id)
+   966→                    .map(|meta| meta.trainer_kind.is_some())
+   967→                    .unwrap_or(false)
+   968→            })
+   969→            .map(|card| card.id)
+   970→            .collect();
+   971→        if options.is_empty() {
+   972→            return true;
+   973→        }
+   974→        let prompt = Prompt::ChooseCardsFromDiscard {
+   975→            player: owner,
+   976→            count: 1,
+   977→            options,
+   978→            min: Some(1),
+   979→            max: Some(1),
+   980→            destination: SelectionDestination::Hand,
+   981→        };
+   982→        game.set_pending_prompt_custom(prompt, owner, "DF-78:Old Rod:Trainer".to_string(), Some(source_id));
+   983→        return true;
+   984→    }
+   985→    true
+   986→}
+   987→
+   988→fn execute_dark_horn(game: &mut GameState, source_id: CardInstanceId) -> bool {
+   989→    let player = match owner_for_source(game, source_id) {
+   990→        Some(player) => player,
+   991→        None => return false,
+   992→    };
+   993→    let player_index = match player {
+   994→        PlayerId::P1 => 0,
+   995→        PlayerId::P2 => 1,
+   996→    };
+   997→    let opponent_index = match player {
+   998→        PlayerId::P1 => 1,
+   999→        PlayerId::P2 => 0,
+  1000→    };
+  1001→    if game.players[opponent_index].bench.is_empty() {
+  1002→        return true;
+  1003→    }
+  1004→    let options: Vec<_> = game.players[player_index]
+  1005→        .hand
+  1006→        .cards()
+  1007→        .iter()
+  1008→        .filter_map(|card| {
+  1009→            let meta = game.card_meta.get(&card.def_id)?;
+  1010→            if meta.is_pokemon {
+  1011→                Some(card.id)
+  1012→            } else {
+  1013→                None
+  1014→            }
+  1015→        })
+  1016→        .collect();
+  1017→    if options.is_empty() {
+  1018→        return true;
+  1019→    }
+  1020→    let prompt = Prompt::ChooseCardsFromHand {
+  1021→        player,
+  1022→        count: 1,
+  1023→        options,
+  1024→        min: Some(0),
+  1025→        max: Some(1),
+  1026→        return_to_deck: false,
+  1027→    };
+  1028→    game.set_pending_prompt_custom(prompt, player, "DF-6:Dark Horn".to_string(), Some(source_id));
+  1029→    true
+  1030→}
+  1031→
+  1032→fn resolve_dark_horn(
+  1033→    game: &mut GameState,
+  1034→    source_id: Option<CardInstanceId>,
+  1035→    target_ids: &[CardInstanceId],
+  1036→) -> bool {
+  1037→    let source_id = match source_id {
+  1038→        Some(id) => id,
+  1039→        None => return false,
+  1040→    };
+  1041→    if target_ids.is_empty() {
+  1042→        return true;
+  1043→    }
+  1044→    let player = match owner_for_source(game, source_id) {
+  1045→        Some(player) => player,
+  1046→        None => return false,
+  1047→    };
+  1048→    let player_index = match player {
+  1049→        PlayerId::P1 => 0,
+  1050→        PlayerId::P2 => 1,
+  1051→    };
+  1052→    for card_id in target_ids {
+  1053→        if let Some(card) = game.players[player_index].hand.remove(*card_id) {
+  1054→            game.players[player_index].discard.add(card);
+  1055→        }
+  1056→    }
+  1057→    let opponent_index = match player {
+  1058→        PlayerId::P1 => 1,
+  1059→        PlayerId::P2 => 0,
+  1060→    };
+  1061→    let options: Vec<_> = game.players[opponent_index]
+  1062→        .bench
+  1063→        .iter()
+  1064→        .map(|slot| slot.card.id)
+  1065→        .collect();
+  1066→    if options.is_empty() {
+  1067→        return true;
+  1068→    }
+  1069→    let prompt = Prompt::ChoosePokemonInPlay {
+  1070→        player,
+  1071→        options,
+  1072→        min: 1,
+  1073→        max: 1,
+  1074→    };
+  1075→    game.set_pending_prompt_custom(
+  1076→        prompt,
+  1077→        player,
+  1078→        "DF-6:Dark Horn:Bench".to_string(),
+  1079→        Some(source_id),
+  1080→    );
+  1081→    true
+  1082→}
+  1083→
+  1084→fn resolve_dark_horn_bench(
+  1085→    game: &mut GameState,
+  1086→    source_id: Option<CardInstanceId>,
+  1087→    target_ids: &[CardInstanceId],
+  1088→) -> bool {
+  1089→    let source_id = match source_id {
+  1090→        Some(id) => id,
+  1091→        None => return false,
+  1092→    };
+  1093→    if target_ids.len() != 1 {
+  1094→        return true;
+  1095→    }
+  1096→    let _ = game.place_damage_counters(target_ids[0], 2, Some(source_id), false);
+  1097→    true
+  1098→}
+  1099→
+  1100→fn execute_delta_copy(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1101→    let player = match owner_for_source(game, source_id) {
+  1102→        Some(player) => player,
+  1103→        None => return false,
+  1104→    };
+  1105→    let opponent_index = match player {
+  1106→        PlayerId::P1 => 1,
+  1107→        PlayerId::P2 => 0,
+  1108→    };
+  1109→    let options: Vec<_> = game.players[opponent_index]
+  1110→        .active
+  1111→        .iter()
+  1112→        .chain(game.players[opponent_index].bench.iter())
+  1113→        .filter(|slot| game.pokemon_is_delta(slot.card.id))
+  1114→        .map(|slot| slot.card.id)
+  1115→        .collect();
+  1116→    if options.is_empty() {
+  1117→        return true;
+  1118→    }
+  1119→    let prompt = Prompt::ChoosePokemonInPlay {
+  1120→        player,
+  1121→        options,
+  1122→        min: 1,
+  1123→        max: 1,
+  1124→    };
+  1125→    game.set_pending_prompt_custom(
+  1126→        prompt,
+  1127→        player,
+  1128→        "DF-11:Delta Copy:Target".to_string(),
+  1129→        Some(source_id),
+  1130→    );
+  1131→    true
+  1132→}
+  1133→
+  1134→fn resolve_delta_copy_target(
+  1135→    game: &mut GameState,
+  1136→    source_id: Option<CardInstanceId>,
+  1137→    target_ids: &[CardInstanceId],
+  1138→) -> bool {
+  1139→    let source_id = match source_id {
+  1140→        Some(id) => id,
+  1141→        None => return false,
+  1142→    };
+  1143→    if target_ids.len() != 1 {
+  1144→        return true;
+  1145→    }
+  1146→    let player = match owner_for_source(game, source_id) {
+  1147→        Some(player) => player,
+  1148→        None => return false,
+  1149→    };
+  1150→    let target_id = target_ids[0];
+  1151→    let slot = match game.slot_by_id(target_id) {
+  1152→        Some(slot) => slot.clone(),
+  1153→        None => return false,
+  1154→    };
+  1155→    if slot.attacks.is_empty() {
+  1156→        return true;
+  1157→    }
+  1158→    let attacks = slot.attacks.iter().map(|attack| attack.name.clone()).collect();
+  1159→    let prompt = Prompt::ChoosePokemonAttack {
+  1160→        player,
+  1161→        pokemon_id: target_id,
+  1162→        attacks,
+  1163→    };
+  1164→    let effect_id = format!("DF-11:Delta Copy:Attack:{}", slot.card.def_id.as_str());
+  1165→    game.set_pending_prompt_custom(prompt, player, effect_id, Some(source_id));
+  1166→    true
+  1167→}
+  1168→
+  1169→fn resolve_delta_copy_attack(
+  1170→    game: &mut GameState,
+  1171→    tail: &str,
+  1172→    source_id: Option<CardInstanceId>,
+  1173→) -> bool {
+  1174→    resolve_copied_attack(game, tail, source_id)
+  1175→}
+  1176→
+  1177→fn execute_mimicry(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1178→    let player = match owner_for_source(game, source_id) {
+  1179→        Some(player) => player,
+  1180→        None => return false,
+  1181→    };
+  1182→    let opponent_index = match player {
+  1183→        PlayerId::P1 => 1,
+  1184→        PlayerId::P2 => 0,
+  1185→    };
+  1186→    let options: Vec<_> = game.players[opponent_index]
+  1187→        .active
+  1188→        .iter()
+  1189→        .chain(game.players[opponent_index].bench.iter())
+  1190→        .map(|slot| slot.card.id)
+  1191→        .collect();
+  1192→    if options.is_empty() {
+  1193→        return true;
+  1194→    }
+  1195→    let prompt = Prompt::ChoosePokemonInPlay {
+  1196→        player,
+  1197→        options,
+  1198→        min: 1,
+  1199→        max: 1,
+  1200→    };
+  1201→    game.set_pending_prompt_custom(
+  1202→        prompt,
+  1203→        player,
+  1204→        "DF-101:Mimicry:Target".to_string(),
+  1205→        Some(source_id),
+  1206→    );
+  1207→    true
+  1208→}
+  1209→
+  1210→fn resolve_mimicry_target(
+  1211→    game: &mut GameState,
+  1212→    source_id: Option<CardInstanceId>,
+  1213→    target_ids: &[CardInstanceId],
+  1214→) -> bool {
+  1215→    let source_id = match source_id {
+  1216→        Some(id) => id,
+  1217→        None => return false,
+  1218→    };
+  1219→    if target_ids.len() != 1 {
+  1220→        return true;
+  1221→    }
+  1222→    let player = match owner_for_source(game, source_id) {
+  1223→        Some(player) => player,
+  1224→        None => return false,
+  1225→    };
+  1226→    let target_id = target_ids[0];
+  1227→    let slot = match game.slot_by_id(target_id) {
+  1228→        Some(slot) => slot.clone(),
+  1229→        None => return false,
+  1230→    };
+  1231→    if slot.attacks.is_empty() {
+  1232→        return true;
+  1233→    }
+  1234→    let attacks = slot.attacks.iter().map(|attack| attack.name.clone()).collect();
+  1235→    let prompt = Prompt::ChoosePokemonAttack {
+  1236→        player,
+  1237→        pokemon_id: target_id,
+  1238→        attacks,
+  1239→    };
+  1240→    let effect_id = format!("DF-101:Mimicry:Attack:{}", slot.card.def_id.as_str());
+  1241→    game.set_pending_prompt_custom(prompt, player, effect_id, Some(source_id));
+  1242→    true
+  1243→}
+  1244→
+  1245→fn resolve_mimicry_attack(
+  1246→    game: &mut GameState,
+  1247→    tail: &str,
+  1248→    source_id: Option<CardInstanceId>,
+  1249→) -> bool {
+  1250→    resolve_copied_attack(game, tail, source_id)
+  1251→}
+  1252→
+  1253→fn resolve_copied_attack(
+  1254→    game: &mut GameState,
+  1255→    tail: &str,
+  1256→    source_id: Option<CardInstanceId>,
+  1257→) -> bool {
+  1258→    let source_id = match source_id {
+  1259→        Some(id) => id,
+  1260→        None => return false,
+  1261→    };
+  1262→    let (def_id, attack_name) = match tail.split_once(':') {
+  1263→        Some((def_id, attack_name)) => (def_id, attack_name),
+  1264→        None => return false,
+  1265→    };
+  1266→    let def_id = CardDefId::new(def_id.to_string());
+  1267→    let meta = match game.card_meta.get(&def_id) {
+  1268→        Some(meta) => meta.clone(),
+  1269→        None => return false,
+  1270→    };
+  1271→    let attack = match meta.attacks.iter().find(|attack| attack.name == attack_name) {
+  1272→        Some(attack) => attack.clone(),
+  1273→        None => return false,
+  1274→    };
+  1275→    perform_copied_attack(game, source_id, &attack)
+  1276→}
+  1277→
+  1278→fn perform_copied_attack(
+  1279→    game: &mut GameState,
+  1280→    source_id: CardInstanceId,
+  1281→    attack: &Attack,
+  1282→) -> bool {
+  1283→    if !game.attack_cost_met(source_id, attack) {
+  1284→        return true;
+  1285→    }
+  1286→    let defender_id = match game.opponent_player().active.as_ref() {
+  1287→        Some(slot) => slot.card.id,
+  1288→        None => return false,
+  1289→    };
+  1290→    let defender = match game.opponent_player().active.as_ref() {
+  1291→        Some(slot) => slot.clone(),
+  1292→        None => return false,
+  1293→    };
+  1294→    let mut attack_override = attack.clone();
+  1295→    attack_override.attack_type = game.attack_type_for(source_id, &attack_override);
+  1296→    let overrides = tcg_core::apply_attack_overrides(
+  1297→        game,
+  1298→        &attack_override,
+  1299→        source_id,
+  1300→        defender_id,
+  1301→    );
+  1302→    if !overrides.prevent_damage && overrides.damage_modifier != 0 {
+  1303→        game.add_damage_modifier(overrides.damage_modifier);
+  1304→    }
+  1305→    if overrides.pre_weakness_modifier != 0 {
+  1306→        let adjusted = attack_override.damage as i32 + overrides.pre_weakness_modifier;
+  1307→        attack_override.damage = adjusted.max(0) as u16;
+  1308→    }
+  1309→    let base_damage = tcg_core::calculate_damage_with_flags(
+  1310→        &attack_override,
+  1311→        &defender,
+  1312→        overrides.ignore_weakness,
+  1313→        overrides.ignore_resistance,
+  1314→    );
+  1315→    let post_weakness = game.damage_after_weakness_modifier(source_id, defender_id);
+  1316→    let adjusted = (base_damage as i32 + post_weakness).max(0) as u16;
+  1317→    let damage = tcg_core::apply_damage_modifier(
+  1318→        adjusted,
+  1319→        game.peek_attack_damage_modifier(source_id, defender_id),
+  1320→    );
+  1321→    let manual_damage = match attack_override.effect_ast.as_ref() {
+  1322→        Some(EffectAst::DealDamageNoModifiers { amount, .. }) => Some(*amount as u16),
+  1323→        Some(EffectAst::DealDamageNoModifiersWithOverkillRecoil { amount, .. }) => {
+  1324→            Some(*amount as u16)
+  1325→        }
+  1326→        _ => None,
+  1327→    };
+  1328→    if !overrides.prevent_damage {
+  1329→        if manual_damage.is_none() {
+  1330→            let _ = tcg_core::execute_attack(game, &attack_override);
+  1331→        } else if let Some(effect) = attack_override.effect_ast.as_ref() {
+  1332→            let _ = tcg_core::execute_effect_with_source(game, effect, Some(source_id));
+  1333→        }
+  1334→        if manual_damage.is_none() {
+  1335→            if !game.prevents_attack_effects(source_id, defender_id) {
+  1336→                if let Some(effect) = attack_override.effect_ast.as_ref() {
+  1337→                    let _ = tcg_core::execute_effect_with_source(game, effect, Some(source_id));
+  1338→                }
+  1339→            }
+  1340→        }
+  1341→        tcg_core::apply_post_attack_custom(
+  1342→            game,
+  1343→            source_id,
+  1344→            defender_id,
+  1345→            damage,
+  1346→        );
+  1347→    }
+  1348→    tcg_core::after_attack(game, source_id, defender_id);
+  1349→    true
+  1350→}
+  1351→
+  1352→fn execute_alluring_kiss(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1353→    let player = match owner_for_source(game, source_id) {
+  1354→        Some(player) => player,
+  1355→        None => return false,
+  1356→    };
+  1357→    let player_index = match player {
+  1358→        PlayerId::P1 => 0,
+  1359→        PlayerId::P2 => 1,
+  1360→    };
+  1361→    let pokemon_options: Vec<_> = game.players[player_index]
+  1362→        .deck
+  1363→        .cards()
+  1364→        .iter()
+  1365→        .filter_map(|card| {
+  1366→            let meta = game.card_meta.get(&card.def_id)?;
+  1367→            if meta.is_pokemon && meta.is_basic {
+  1368→                Some(card.id)
+  1369→            } else {
+  1370→                None
+  1371→            }
+  1372→        })
+  1373→        .collect();
+  1374→    let energy_options: Vec<_> = game.players[player_index]
+  1375→        .deck
+  1376→        .cards()
+  1377→        .iter()
+  1378→        .filter_map(|card| {
+  1379→            let meta = game.card_meta.get(&card.def_id)?;
+  1380→            if meta.is_energy && meta.energy_kind.as_deref() == Some("Basic") {
+  1381→                Some(card.id)
+  1382→            } else {
+  1383→                None
+  1384→            }
+  1385→        })
+  1386→        .collect();
+  1387→    if pokemon_options.is_empty() || energy_options.is_empty() {
+  1388→        return true;
+  1389→    }
+  1390→    let prompt = Prompt::ChooseCardsFromDeck {
+  1391→        player,
+  1392→        count: 1,
+  1393→        options: pokemon_options,
+  1394→        revealed_cards: Vec::new(),
+  1395→        min: Some(1),
+  1396→        max: Some(1),
+  1397→        destination: SelectionDestination::Hand,
+  1398→        shuffle: false,
+  1399→    };
+  1400→    game.set_pending_prompt_custom(
+  1401→        prompt,
+  1402→        player,
+  1403→        "DF-64:Alluring Kiss:Pokemon".to_string(),
+  1404→        Some(source_id),
+  1405→    );
+  1406→    true
+  1407→}
+  1408→
+  1409→fn resolve_alluring_kiss_pokemon(
+  1410→    game: &mut GameState,
+  1411→    source_id: Option<CardInstanceId>,
+  1412→    target_ids: &[CardInstanceId],
+  1413→) -> bool {
+  1414→    let source_id = match source_id {
+  1415→        Some(id) => id,
+  1416→        None => return false,
+  1417→    };
+  1418→    if target_ids.len() != 1 {
+  1419→        return true;
+  1420→    }
+  1421→    let player = match owner_for_source(game, source_id) {
+  1422→        Some(player) => player,
+  1423→        None => return false,
+  1424→    };
+  1425→    let player_index = match player {
+  1426→        PlayerId::P1 => 0,
+  1427→        PlayerId::P2 => 1,
+  1428→    };
+  1429→    let energy_options: Vec<_> = game.players[player_index]
+  1430→        .deck
+  1431→        .cards()
+  1432→        .iter()
+  1433→        .filter_map(|card| {
+  1434→            let meta = game.card_meta.get(&card.def_id)?;
+  1435→            if meta.is_energy && meta.energy_kind.as_deref() == Some("Basic") {
+  1436→                Some(card.id)
+  1437→            } else {
+  1438→                None
+  1439→            }
+  1440→        })
+  1441→        .collect();
+  1442→    if energy_options.is_empty() {
+  1443→        return true;
+  1444→    }
+  1445→    let prompt = Prompt::ChooseCardsFromDeck {
+  1446→        player,
+  1447→        count: 1,
+  1448→        options: energy_options,
+  1449→        revealed_cards: Vec::new(),
+  1450→        min: Some(1),
+  1451→        max: Some(1),
+  1452→        destination: SelectionDestination::Hand,
+  1453→        shuffle: true,
+  1454→    };
+  1455→    game.set_pending_prompt_custom(
+  1456→        prompt,
+  1457→        player,
+  1458→        "DF-64:Alluring Kiss:Energy".to_string(),
+  1459→        Some(source_id),
+  1460→    );
+  1461→    true
+  1462→}
+  1463→
+  1464→fn resolve_alluring_kiss_energy(
+  1465→    _game: &mut GameState,
+  1466→    _source_id: Option<CardInstanceId>,
+  1467→    _target_ids: &[CardInstanceId],
+  1468→) -> bool {
+  1469→    true
+  1470→}
+  1471→
+  1472→fn execute_dragon_roar(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1473→    let player = match owner_for_source(game, source_id) {
+  1474→        Some(player) => player,
+  1475→        None => return false,
+  1476→    };
+  1477→    let opponent_index = match player {
+  1478→        PlayerId::P1 => 1,
+  1479→        PlayerId::P2 => 0,
+  1480→    };
+  1481→    let defender_id = match game.players[opponent_index].active.as_ref() {
+  1482→        Some(slot) => slot.card.id,
+  1483→        None => return false,
+  1484→    };
+  1485→    let remaining_hp = game
+  1486→        .slot_by_id(defender_id)
+  1487→        .map(|slot| slot.hp.saturating_sub(slot.damage_counters * 10) as i32)
+  1488→        .unwrap_or(0);
+  1489→    let _ = game.place_damage_counters(defender_id, 8, Some(source_id), true);
+  1490→    if remaining_hp <= 0 {
+  1491→        return true;
+  1492→    }
+  1493→    let overflow = 80 - remaining_hp;
+  1494→    if overflow <= 0 {
+  1495→        return true;
+  1496→    }
+  1497→    let bench_ids: Vec<_> = game.players[opponent_index]
+  1498→        .bench
+  1499→        .iter()
+  1500→        .map(|slot| slot.card.id)
+  1501→        .collect();
+  1502→    if bench_ids.is_empty() {
+  1503→        return true;
+  1504→    }
+  1505→    let max = ((overflow / 10).max(1) as usize).min(bench_ids.len());
+  1506→    let prompt = Prompt::ChoosePokemonInPlay {
+  1507→        player,
+  1508→        options: bench_ids,
+  1509→        min: 1,
+  1510→        max,
+  1511→    };
+  1512→    let effect_id = format!("DF-91:Dragon Roar:{overflow}");
+  1513→    game.set_pending_prompt_custom(prompt, player, effect_id, Some(source_id));
+  1514→    true
+  1515→}
+  1516→
+  1517→fn resolve_dragon_roar(
+  1518→    _game: &mut GameState,
+  1519→    _source_id: Option<CardInstanceId>,
+  1520→) -> bool {
+  1521→    true
+  1522→}
+  1523→
+  1524→fn resolve_dragon_roar_overflow(
+  1525→    game: &mut GameState,
+  1526→    tail: &str,
+  1527→    target_ids: &[CardInstanceId],
+  1528→) -> bool {
+  1529→    let overflow = match tail.parse::<i32>() {
+  1530→        Ok(value) => value,
+  1531→        Err(_) => return false,
+  1532→    };
+  1533→    if overflow <= 0 || target_ids.is_empty() {
+  1534→        return true;
+  1535→    }
+  1536→    let counters = (overflow / 10).max(1) as u16;
+  1537→    let mut remaining = counters;
+  1538→    for target_id in target_ids {
+  1539→        if remaining == 0 {
+  1540→            break;
+  1541→        }
+  1542→        let _ = game.place_damage_counters(*target_id, 1, None, true);
+  1543→        remaining = remaining.saturating_sub(1);
+  1544→    }
+  1545→    if remaining > 0 {
+  1546→        let _ = game.place_damage_counters(target_ids[0], remaining, None, true);
+  1547→    }
+  1548→    true
+  1549→}
+  1550→
+  1551→fn execute_dual_stream(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1552→    let player = match owner_for_source(game, source_id) {
+  1553→        Some(player) => player,
+  1554→        None => return false,
+  1555→    };
+  1556→    let opponent_index = match player {
+  1557→        PlayerId::P1 => 1,
+  1558→        PlayerId::P2 => 0,
+  1559→    };
+  1560→    let options: Vec<_> = game.players[opponent_index]
+  1561→        .bench
+  1562→        .iter()
+  1563→        .map(|slot| slot.card.id)
+  1564→        .collect();
+  1565→    if options.is_empty() {
+  1566→        return true;
+  1567→    }
+  1568→    let prompt = Prompt::ChoosePokemonInPlay {
+  1569→        player,
+  1570→        options,
+  1571→        min: 0,
+  1572→        max: 1,
+  1573→    };
+  1574→    game.set_pending_prompt_custom(
+  1575→        prompt,
+  1576→        player,
+  1577→        "DF-98:Dual Stream:Bench".to_string(),
+  1578→        Some(source_id),
+  1579→    );
+  1580→    true
+  1581→}
+  1582→
+  1583→fn resolve_dual_stream_bench(
+  1584→    game: &mut GameState,
+  1585→    source_id: Option<CardInstanceId>,
+  1586→    target_ids: &[CardInstanceId],
+  1587→) -> bool {
+  1588→    if target_ids.len() != 1 {
+  1589→        return true;
+  1590→    }
+  1591→    let source_id = match source_id {
+  1592→        Some(id) => id,
+  1593→        None => return false,
+  1594→    };
+  1595→    let _ = game.add_marker(source_id, Marker::new("Dual Stream Reduced"));
+  1596→    let _ = game.place_damage_counters(target_ids[0], 4, None, false);
+  1597→    true
+  1598→}
+  1599→
+  1600→fn execute_shock_wave(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1601→    let player = match owner_for_source(game, source_id) {
+  1602→        Some(player) => player,
+  1603→        None => return false,
+  1604→    };
+  1605→    let opponent_index = match player {
+  1606→        PlayerId::P1 => 1,
+  1607→        PlayerId::P2 => 0,
+  1608→    };
+  1609→    let options: Vec<_> = game.players[opponent_index]
+  1610→        .active
+  1611→        .iter()
+  1612→        .chain(game.players[opponent_index].bench.iter())
+  1613→        .filter(|slot| game.has_marker(slot.card.id, "Shock-wave"))
+  1614→        .map(|slot| slot.card.id)
+  1615→        .collect();
+  1616→    if options.is_empty() {
+  1617→        return true;
+  1618→    }
+  1619→    let prompt = Prompt::ChoosePokemonInPlay {
+  1620→        player,
+  1621→        options,
+  1622→        min: 1,
+  1623→        max: 1,
+  1624→    };
+  1625→    game.set_pending_prompt_custom(
+  1626→        prompt,
+  1627→        player,
+  1628→        "DF-99:Shock-wave".to_string(),
+  1629→        Some(source_id),
+  1630→    );
+  1631→    true
+  1632→}
+  1633→
+  1634→fn resolve_shock_wave(
+  1635→    game: &mut GameState,
+  1636→    _source_id: Option<CardInstanceId>,
+  1637→    target_ids: &[CardInstanceId],
+  1638→) -> bool {
+  1639→    if target_ids.len() != 1 {
+  1640→        return true;
+  1641→    }
+  1642→    let target_id = target_ids[0];
+  1643→    let remaining = game
+  1644→        .slot_by_id(target_id)
+  1645→        .map(|slot| slot.hp.saturating_sub(slot.damage_counters * 10) as u32)
+  1646→        .unwrap_or(0);
+  1647→    if remaining == 0 {
+  1648→        return true;
+  1649→    }
+  1650→    let counters = ((remaining + 9) / 10) as u16;
+  1651→    let _ = game.place_damage_counters(target_id, counters, None, true);
+  1652→    true
+  1653→}
+  1654→
+  1655→fn execute_rotating_claws(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1656→    let player = match owner_for_source(game, source_id) {
+  1657→        Some(player) => player,
+  1658→        None => return false,
+  1659→    };
+  1660→    let player_index = match player {
+  1661→        PlayerId::P1 => 0,
+  1662→        PlayerId::P2 => 1,
+  1663→    };
+  1664→    let slot = match game.players[player_index].find_pokemon_mut(source_id) {
+  1665→        Some(slot) => slot,
+  1666→        None => return false,
+  1667→    };
+  1668→    if slot.attached_energy.is_empty() {
+  1669→        return true;
+  1670→    }
+  1671→    let prompt = Prompt::ChooseAttachedEnergy {
+  1672→        player,
+  1673→        pokemon_id: source_id,
+  1674→        count: 1,
+  1675→        min: Some(0),
+  1676→    };
+  1677→    game.set_pending_prompt_custom(
+  1678→        prompt,
+  1679→        player,
+  1680→        "DF-100:Rotating Claws:Discard".to_string(),
+  1681→        Some(source_id),
+  1682→    );
+  1683→    true
+  1684→}
+  1685→
+  1686→fn resolve_rotating_claws(_game: &mut GameState, _source_id: Option<CardInstanceId>) -> bool {
+  1687→    true
+  1688→}
+  1689→
+  1690→fn resolve_rotating_claws_discard(
+  1691→    game: &mut GameState,
+  1692→    source_id: Option<CardInstanceId>,
+  1693→    target_ids: &[CardInstanceId],
+  1694→) -> bool {
+  1695→    if target_ids.is_empty() {
+  1696→        return true;
+  1697→    }
+  1698→    let source_id = match source_id {
+  1699→        Some(id) => id,
+  1700→        None => return false,
+  1701→    };
+  1702→    let discarded_id = target_ids[0];
+  1703→    let player = match owner_for_source(game, source_id) {
+  1704→        Some(player) => player,
+  1705→        None => return false,
+  1706→    };
+  1707→    let player_index = match player {
+  1708→        PlayerId::P1 => 0,
+  1709→        PlayerId::P2 => 1,
+  1710→    };
+  1711→    let slot = match game.players[player_index].find_pokemon_mut(source_id) {
+  1712→        Some(slot) => slot,
+  1713→        None => return false,
+  1714→    };
+  1715→    let pos = match slot
+  1716→        .attached_energy
+  1717→        .iter()
+  1718→        .position(|energy| energy.id == discarded_id)
+  1719→    {
+  1720→        Some(pos) => pos,
+  1721→        None => return false,
+  1722→    };
+  1723→    let discarded = slot.attached_energy.remove(pos);
+  1724→    game.players[player_index].discard.add(discarded.clone());
+  1725→    let options: Vec<_> = game.players[player_index]
+  1726→        .discard
+  1727→        .cards()
+  1728→        .iter()
+  1729→        .filter(|card| game.is_energy_card(card) && card.id != discarded.id)
+  1730→        .map(|card| card.id)
+  1731→        .collect();
+  1732→    if options.is_empty() {
+  1733→        return true;
+  1734→    }
+  1735→    let prompt = Prompt::ChooseCardsFromDiscard {
+  1736→        player,
+  1737→        count: 1,
+  1738→        options,
+  1739→        min: Some(1),
+  1740→        max: Some(1),
+  1741→        destination: SelectionDestination::Discard,
+  1742→    };
+  1743→    let effect_id = format!("DF-100:Rotating Claws:Energy:{}", discarded.id.value());
+  1744→    game.set_pending_prompt_custom(prompt, player, effect_id, Some(source_id));
+  1745→    true
+  1746→}
+  1747→
+  1748→fn resolve_rotating_claws_energy(
+  1749→    game: &mut GameState,
+  1750→    tail: &str,
+  1751→    source_id: Option<CardInstanceId>,
+  1752→    target_ids: &[CardInstanceId],
+  1753→) -> bool {
+  1754→    let source_id = match source_id {
+  1755→        Some(id) => id,
+  1756→        None => return false,
+  1757→    };
+  1758→    let _discarded_id = match tail.parse::<u64>() {
+  1759→        Ok(value) => value,
+  1760→        Err(_) => return false,
+  1761→    };
+  1762→    let player = match owner_for_source(game, source_id) {
+  1763→        Some(player) => player,
+  1764→        None => return false,
+  1765→    };
+  1766→    let player_index = match player {
+  1767→        PlayerId::P1 => 0,
+  1768→        PlayerId::P2 => 1,
+  1769→    };
+  1770→    if target_ids.len() != 1 {
+  1771→        return true;
+  1772→    }
+  1773→    let energy_id = target_ids[0];
+  1774→    let energy = match game.players[player_index].discard.remove(energy_id) {
+  1775→        Some(card) => card,
+  1776→        None => return false,
+  1777→    };
+  1778→    if let Some(slot) = game.players[player_index].find_pokemon_mut(source_id) {
+  1779→        slot.attached_energy.push(energy);
+  1780→    } else {
+  1781→        game.players[player_index].discard.add(energy);
+  1782→    }
+  1783→    true
+  1784→}
+  1785→
+  1786→fn execute_rainbow_wave(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1787→    let player = match owner_for_source(game, source_id) {
+  1788→        Some(player) => player,
+  1789→        None => return false,
+  1790→    };
+  1791→    let player_index = match player {
+  1792→        PlayerId::P1 => 0,
+  1793→        PlayerId::P2 => 1,
+  1794→    };
+  1795→    let slot = match game.players[player_index].find_pokemon(source_id) {
+  1796→        Some(slot) => slot,
+  1797→        None => return false,
+  1798→    };
+  1799→    let chosen_energy = slot
+  1800→        .attached_energy
+  1801→        .iter()
+  1802→        .find(|card| {
+  1803→            game.card_meta
+  1804→                .get(&card.def_id)
+  1805→                .and_then(|meta| meta.energy_kind.as_deref())
+  1806→                == Some("Basic")
+  1807→        })
+  1808→        .cloned();
+  1809→    let chosen_energy = match chosen_energy {
+  1810→        Some(energy) => energy,
+  1811→        None => return true,
+  1812→    };
+  1813→    let types = game.energy_provides(&chosen_energy);
+  1814→    let energy_type = match types.first() {
+  1815→        Some(type_) => *type_,
+  1816→        None => return true,
+  1817→    };
+  1818→    let opponent_index = match player {
+  1819→        PlayerId::P1 => 1,
+  1820→        PlayerId::P2 => 0,
+  1821→    };
+  1822→    let targets: Vec<_> = game.players[opponent_index]
+  1823→        .active
+  1824→        .iter()
+  1825→        .chain(game.players[opponent_index].bench.iter())
+  1826→        .filter(|slot| game.effective_types_for(slot.card.id).contains(&energy_type))
+  1827→        .map(|slot| slot.card.id)
+  1828→        .collect();
+  1829→    for target_id in targets {
+  1830→        let _ = game.place_damage_counters(target_id, 2, Some(source_id), false);
+  1831→    }
+  1832→    true
+  1833→}
+  1834→
+  1835→fn resolve_rainbow_wave(
+  1836→    game: &mut GameState,
+  1837→    source_id: Option<CardInstanceId>,
+  1838→    _target_ids: &[CardInstanceId],
+  1839→) -> bool {
+  1840→    let source_id = match source_id {
+  1841→        Some(id) => id,
+  1842→        None => return false,
+  1843→    };
+  1844→    execute_rainbow_wave(game, source_id)
+  1845→}
+  1846→
+  1847→fn execute_sharing(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1848→    let owner = match owner_for_source(game, source_id) {
+  1849→        Some(player) => player,
+  1850→        None => return false,
+  1851→    };
+  1852→    let opponent = match owner {
+  1853→        PlayerId::P1 => PlayerId::P2,
+  1854→        PlayerId::P2 => PlayerId::P1,
+  1855→    };
+  1856→    let opponent_index = match opponent {
+  1857→        PlayerId::P1 => 0,
+  1858→        PlayerId::P2 => 1,
+  1859→    };
+  1860→    let hand_ids = game.players[opponent_index].hand.order();
+  1861→    if !hand_ids.is_empty() {
+  1862→        game.reveal_cards(opponent, &hand_ids);
+  1863→    }
+  1864→    let options: Vec<_> = hand_ids
+  1865→        .into_iter()
+  1866→        .filter(|card_id| {
+  1867→            let card = match game.players[opponent_index].hand.get(*card_id) {
+  1868→                Some(card) => card,
+  1869→                None => return false,
+  1870→            };
+  1871→            game.card_meta
+  1872→                .get(&card.def_id)
+  1873→                .and_then(|meta| meta.trainer_kind.as_deref())
+  1874→                == Some("Supporter")
+  1875→        })
+  1876→        .collect();
+  1877→    if options.is_empty() {
+  1878→        return true;
+  1879→    }
+  1880→    let prompt = Prompt::ChooseCardsFromHand {
+  1881→        player: opponent,
+  1882→        count: 1,
+  1883→        options,
+  1884→        min: Some(0),
+  1885→        max: Some(1),
+  1886→        return_to_deck: false,
+  1887→    };
+  1888→    game.set_pending_prompt_custom(prompt, owner, "DF-5:Sharing".to_string(), Some(source_id));
+  1889→    true
+  1890→}
+  1891→
+  1892→fn resolve_sharing(
+  1893→    game: &mut GameState,
+  1894→    source_id: Option<CardInstanceId>,
+  1895→    target_ids: &[CardInstanceId],
+  1896→) -> bool {
+  1897→    let source_id = match source_id {
+  1898→        Some(id) => id,
+  1899→        None => return false,
+  1900→    };
+  1901→    if target_ids.is_empty() {
+  1902→        return true;
+  1903→    }
+  1904→    if target_ids.len() != 1 {
+  1905→        return false;
+  1906→    }
+  1907→    let opponent = match owner_for_source(game, source_id) {
+  1908→        Some(PlayerId::P1) => PlayerId::P2,
+  1909→        Some(PlayerId::P2) => PlayerId::P1,
+  1910→        None => return false,
+  1911→    };
+  1912→    let opponent_index = match opponent {
+  1913→        PlayerId::P1 => 0,
+  1914→        PlayerId::P2 => 1,
+  1915→    };
+  1916→    let card_id = target_ids[0];
+  1917→    let card = match game.players[opponent_index].hand.get(card_id) {
+  1918→        Some(card) => card.clone(),
+  1919→        None => return false,
+  1920→    };
+  1921→    let meta = match game.card_meta.get(&card.def_id) {
+  1922→        Some(meta) => meta,
+  1923→        None => return false,
+  1924→    };
+  1925→    if meta.trainer_kind.as_deref() != Some("Supporter") {
+  1926→        return false;
+  1927→    }
+  1928→    let effect_value = match meta.trainer_effect.as_ref() {
+  1929→        Some(value) => value.clone(),
+  1930→        None => return false,
+  1931→    };
+  1932→    let effect_ast: EffectAst = match serde_json::from_value(effect_value) {
+  1933→        Ok(effect) => effect,
+  1934→        Err(_) => return false,
+  1935→    };
+  1936→    let _ = tcg_core::execute_effect_with_source(game, &effect_ast, Some(source_id));
+  1937→    true
+  1938→}
+  1939→
+  1940→pub fn attack_cost_modifier(
+  1941→    game: &GameState,
+  1942→    attacker_id: CardInstanceId,
+  1943→    attack: &Attack,
+  1944→) -> i32 {
+  1945→    let attacker = match game
+  1946→        .current_player()
+  1947→        .find_pokemon(attacker_id)
+  1948→        .or_else(|| game.opponent_player().find_pokemon(attacker_id))
+  1949→    {
+  1950→        Some(slot) => slot,
+  1951→        None => return 0,
+  1952→    };
+  1953→    if !def_id_matches(&attacker.card.def_id, "DF", 97) {
+  1954→        return 0;
+  1955→    }
+  1956→    if attack.name != "Special Circuit" && attack.name != "Sky-high Claws" {
+  1957→        return 0;
+  1958→    }
+  1959→    let owner = if game.current_player().find_pokemon(attacker_id).is_some() {
+  1960→        game.turn.player
+  1961→    } else {
+  1962→        match game.turn.player {
+  1963→            PlayerId::P1 => PlayerId::P2,
+  1964→            PlayerId::P2 => PlayerId::P1,
+  1965→        }
+  1966→    };
+  1967→    let (me, opp) = match owner {
+  1968→        PlayerId::P1 => (&game.players[0], &game.players[1]),
+  1969→        PlayerId::P2 => (&game.players[1], &game.players[0]),
+  1970→    };
+  1971→    if me.prizes.count() <= opp.prizes.count() {
+  1972→        return 0;
+  1973→    }
+  1974→    let colorless = attack
+  1975→        .cost
+  1976→        .types
+  1977→        .iter()
+  1978→        .filter(|type_| **type_ == Type::Colorless)
+  1979→        .count() as i32;
+  1980→    -colorless
+  1981→}
+  1982→
+  1983→// execute_invitation moved to df/cards/df_007_nidoqueen.rs
+  1984→
+  1985→fn execute_prowl(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  1986→    let (player, player_state) = match owner_for_source(game, source_id) {
+  1987→        Some(PlayerId::P1) => (PlayerId::P1, &mut game.players[0]),
+  1988→        Some(PlayerId::P2) => (PlayerId::P2, &mut game.players[1]),
+  1989→        None => return false,
+  1990→    };
+  1991→    let options: Vec<_> = player_state.deck.cards().iter().map(|card| card.id).collect();
+  1992→    if options.is_empty() {
+  1993→        return false;
+  1994→    }
+  1995→    let revealed_cards = game.build_revealed_cards(&options);
+  1996→    let prompt = Prompt::ChooseCardsFromDeck {
+  1997→        player,
+  1998→        count: 1,
+  1999→        options,
+  2000→        revealed_cards,
+  2001→        min: None,
+  2002→        max: None,
+  2003→        destination: SelectionDestination::Hand,
+  2004→        shuffle: true,
+  2005→    };
+  2006→    game.set_pending_prompt(prompt, player);
+  2007→    true
+  2008→}
+  2009→
+  2010→fn execute_snorlax_dozing(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2011→    let is_active = game
+  2012→        .current_player()
+  2013→        .active
+  2014→        .as_ref()
+  2015→        .map(|slot| slot.card.id == source_id)
+  2016→        .unwrap_or(false);
+  2017→    if !is_active {
+  2018→        return false;
+  2019→    }
+  2020→    let slot = match game.current_player_mut().active.as_mut() {
+  2021→        Some(active) => active,
+  2022→        None => return false,
+  2023→    };
+  2024→    if !def_id_matches(&slot.card.def_id, "DF", 10) {
+  2025→        return false;
+  2026→    }
+  2027→    if !slot.special_conditions.is_empty() {
+  2028→        return false;
+  2029→    }
+  2030→    slot.damage_counters = slot.damage_counters.saturating_sub(2);
+  2031→    let _ = slot.add_special_condition(SpecialCondition::Asleep);
+  2032→    true
+  2033→}
+  2034→
+  2035→fn execute_shady_move(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2036→    let owner = match owner_for_source(game, source_id) {
+  2037→        Some(player) => player,
+  2038→        None => return false,
+  2039→    };
+  2040→    let owner_index = match owner {
+  2041→        PlayerId::P1 => 0,
+  2042→        PlayerId::P2 => 1,
+  2043→    };
+  2044→    let active = match game.players[owner_index].active.as_ref() {
+  2045→        Some(slot) => slot,
+  2046→        None => return false,
+  2047→    };
+  2048→    let is_active = active.card.id == source_id;
+  2049→    if !is_active {
+  2050→        return false;
+  2051→    }
+  2052→    if !def_id_matches(&active.card.def_id, "DF", 12) {
+  2053→        return false;
+  2054→    }
+  2055→    let options = all_pokemon_in_play(game);
+  2056→    if options.len() < 2 {
+  2057→        return false;
+  2058→    }
+  2059→    let has_damage = options.iter().any(|id| damage_counters_for(game, *id) > 0);
+  2060→    if !has_damage {
+  2061→        return false;
+  2062→    }
+  2063→    let prompt = Prompt::ChoosePokemonInPlay {
+  2064→        player: owner,
+  2065→        options,
+  2066→        min: 2,
+  2067→        max: 2,
+  2068→    };
+  2069→    game.set_pending_prompt_custom(prompt, owner, "DF-12:Shady Move".to_string(), Some(source_id));
+  2070→    true
+  2071→}
+  2072→
+  2073→fn resolve_shady_move(game: &mut GameState, target_ids: &[CardInstanceId]) -> bool {
+  2074→    if target_ids.len() != 2 {
+  2075→        return false;
+  2076→    }
+  2077→    let source_id = target_ids[0];
+  2078→    let target_id = target_ids[1];
+  2079→    if source_id == target_id {
+  2080→        return false;
+  2081→    }
+  2082→    game.move_damage_counter(source_id, target_id)
+  2083→}
+  2084→
+  2085→fn execute_volunteer(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2086→    let owner = match owner_for_source(game, source_id) {
+  2087→        Some(player) => player,
+  2088→        None => return false,
+  2089→    };
+  2090→    let owner_index = match owner {
+  2091→        PlayerId::P1 => 0,
+  2092→        PlayerId::P2 => 1,
+  2093→    };
+  2094→    let slot = match game.players[owner_index].find_pokemon(source_id) {
+  2095→        Some(slot) => slot,
+  2096→        None => return false,
+  2097→    };
+  2098→    if !def_id_matches(&slot.card.def_id, "DF", 8) {
+  2099→        return false;
+  2100→    }
+  2101→    let new_id = match game.devolve_pokemon(source_id, 4, true) {
+  2102→        Some(id) => id,
+  2103→        None => return false,
+  2104→    };
+  2105→    let options: Vec<_> = game.players[owner_index]
+  2106→        .deck
+  2107→        .cards()
+  2108→        .iter()
+  2109→        .filter(|card| {
+  2110→            game.card_meta
+  2111→                .get(&card.def_id)
+  2112→                .map(|meta| meta.name == "Ninetales" || meta.name == "Ninetales ex")
+  2113→                .unwrap_or(false)
+  2114→        })
+  2115→        .map(|card| card.id)
+  2116→        .collect();
+  2117→    if options.is_empty() {
+  2118→        return true;
+  2119→    }
+  2120→    let revealed_cards = game.build_revealed_cards(&options);
+  2121→    let prompt = Prompt::ChooseCardsFromDeck {
+  2122→        player: owner,
+  2123→        count: 1,
+  2124→        options,
+  2125→        revealed_cards,
+  2126→        min: Some(1),
+  2127→        max: Some(1),
+  2128→        destination: SelectionDestination::Hand,
+  2129→        shuffle: true,
+  2130→    };
+  2131→    game.set_pending_prompt_custom(prompt, owner, "DF-8:Volunteer".to_string(), Some(new_id));
+  2132→    true
+  2133→}
+  2134→
+  2135→fn resolve_volunteer(
+  2136→    game: &mut GameState,
+  2137→    source_id: Option<CardInstanceId>,
+  2138→    target_ids: &[CardInstanceId],
+  2139→) -> bool {
+  2140→    let target_id = match source_id {
+  2141→        Some(id) => id,
+  2142→        None => return false,
+  2143→    };
+  2144→    if target_ids.len() != 1 {
+  2145→        return false;
+  2146→    }
+  2147→    let owner = match game.owner_for_pokemon(target_id) {
+  2148→        Some(player) => player,
+  2149→        None => return false,
+  2150→    };
+  2151→    let owner_index = match owner {
+  2152→        PlayerId::P1 => 0,
+  2153→        PlayerId::P2 => 1,
+  2154→    };
+  2155→    let card_id = target_ids[0];
+  2156→    let card = match game.players[owner_index].hand.remove(card_id) {
+  2157→        Some(card) => card,
+  2158→        None => return false,
+  2159→    };
+  2160→    let meta = game.card_meta.get(&card.def_id).cloned();
+  2161→    let (slot_clone, old_id, new_id) = {
+  2162→        let target = match game.players[owner_index].find_pokemon_mut(target_id) {
+  2163→            Some(slot) => slot,
+  2164→            None => return false,
+  2165→        };
+  2166→        let old_id = target.card.id;
+  2167→        target.evolution_stack.push(target.card.clone());
+  2168→        target.card = card;
+  2169→        if let Some(meta) = meta.as_ref() {
+  2170→            target.is_ex = meta.is_ex;
+  2171→            target.is_star = meta.is_star;
+  2172→            target.is_delta = meta.is_delta;
+  2173→            target.stage = meta.stage;
+  2174→        }
+  2175→        target.clear_special_conditions();
+  2176→        let new_id = target.card.id;
+  2177→        (target.clone(), old_id, new_id)
+  2178→    };
+  2179→    game.clear_triggers_for(old_id);
+  2180→    game.clear_restrictions_for_source(old_id);
+  2181→    game.clear_stat_modifiers_for_source(old_id);
+  2182→    tcg_core::register_card_triggers(game, &slot_clone);
+  2183→    game.emit_trigger(TriggerEvent::OnEvolveFromHand {
+  2184→        player: owner,
+  2185→        pokemon_id: new_id,
+  2186→    });
+  2187→    true
+  2188→}
+  2189→
+  2190→fn execute_evolutionary_call(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2191→    let owner = match owner_for_source(game, source_id) {
+  2192→        Some(player) => player,
+  2193→        None => return false,
+  2194→    };
+  2195→    let player_state = match owner {
+  2196→        PlayerId::P1 => &mut game.players[0],
+  2197→        PlayerId::P2 => &mut game.players[1],
+  2198→    };
+  2199→    let options: Vec<_> = player_state
+  2200→        .deck
+  2201→        .cards()
+  2202→        .iter()
+  2203→        .filter(|card| {
+  2204→            game.card_meta
+  2205→                .get(&card.def_id)
+  2206→                .map(|meta| meta.is_pokemon)
+  2207→                .unwrap_or(false)
+  2208→        })
+  2209→        .map(|card| card.id)
+  2210→        .collect();
+  2211→    if options.is_empty() {
+  2212→        return false;
+  2213→    }
+  2214→    let revealed_cards = game.build_revealed_cards(&options);
+  2215→    let prompt = Prompt::ChooseCardsFromDeck {
+  2216→        player: owner,
+  2217→        count: 3,
+  2218→        options,
+  2219→        revealed_cards,
+  2220→        min: Some(0),
+  2221→        max: Some(3),
+  2222→        destination: SelectionDestination::Hand,
+  2223→        shuffle: true,
+  2224→    };
+  2225→    game.set_pending_prompt(prompt, owner);
+  2226→    true
+  2227→}
+  2228→
+  2229→fn execute_power_circulation(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2230→    let owner = match owner_for_source(game, source_id) {
+  2231→        Some(player) => player,
+  2232→        None => return false,
+  2233→    };
+  2234→    let player_state = match owner {
+  2235→        PlayerId::P1 => &mut game.players[0],
+  2236→        PlayerId::P2 => &mut game.players[1],
+  2237→    };
+  2238→    let options: Vec<_> = player_state
+  2239→        .discard
+  2240→        .cards()
+  2241→        .iter()
+  2242→        .filter(|card| {
+  2243→            game.card_meta
+  2244→                .get(&card.def_id)
+  2245→                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+  2246→                .unwrap_or(false)
+  2247→        })
+  2248→        .map(|card| card.id)
+  2249→        .collect();
+  2250→    if options.is_empty() {
+  2251→        return false;
+  2252→    }
+  2253→    let prompt = Prompt::ChooseCardsFromDiscard {
+  2254→        player: owner,
+  2255→        count: 1,
+  2256→        options,
+  2257→        min: Some(1),
+  2258→        max: Some(1),
+  2259→        destination: SelectionDestination::DeckTop,
+  2260→    };
+  2261→    game.set_pending_prompt_custom(
+  2262→        prompt,
+  2263→        owner,
+  2264→        "DF-20:Power Circulation".to_string(),
+  2265→        Some(source_id),
+  2266→    );
+  2267→    true
+  2268→}
+  2269→
+  2270→fn execute_power_of_evolution(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2271→    let owner = match owner_for_source(game, source_id) {
+  2272→        Some(player) => player,
+  2273→        None => return false,
+  2274→    };
+  2275→    let player_index = match owner {
+  2276→        PlayerId::P1 => 0,
+  2277→        PlayerId::P2 => 1,
+  2278→    };
+  2279→    if game.players[player_index].find_pokemon(source_id).is_none() {
+  2280→        return false;
+  2281→    }
+  2282→    if !game.is_evolved(source_id) {
+  2283→        return false;
+  2284→    }
+  2285→    if let Some(card) = game.players[player_index].deck.draw_bottom() {
+  2286→        game.players[player_index].hand.add(card);
+  2287→        true
+  2288→    } else {
+  2289→        false
+  2290→    }
+  2291→}
+  2292→
+  2293→fn execute_baby_evolution(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2294→    let owner = match owner_for_source(game, source_id) {
+  2295→        Some(player) => player,
+  2296→        None => return false,
+  2297→    };
+  2298→    let options: Vec<_> = match owner {
+  2299→        PlayerId::P1 => game.players[0]
+  2300→            .hand
+  2301→            .order()
+  2302→            .into_iter()
+  2303→            .filter(|card_id| game.can_evolve_from_hand(*card_id, source_id))
+  2304→            .collect(),
+  2305→        PlayerId::P2 => game.players[1]
+  2306→            .hand
+  2307→            .order()
+  2308→            .into_iter()
+  2309→            .filter(|card_id| game.can_evolve_from_hand(*card_id, source_id))
+  2310→            .collect(),
+  2311→    };
+  2312→    if options.is_empty() {
+  2313→        return false;
+  2314→    }
+  2315→    let prompt = Prompt::ChooseCardsFromHand {
+  2316→        player: owner,
+  2317→        count: 1,
+  2318→        options,
+  2319→        min: Some(0),
+  2320→        max: Some(1),
+  2321→        return_to_deck: false,
+  2322→    };
+  2323→    let effect_id = format!("{}:Baby Evolution", card_def_id_for_source(game, source_id));
+  2324→    game.set_pending_prompt_custom(prompt, owner, effect_id, Some(source_id));
+  2325→    true
+  2326→}
+  2327→
+  2328→fn card_def_id_for_source(game: &GameState, source_id: CardInstanceId) -> CardDefId {
+  2329→    game.slot_by_id(source_id)
+  2330→        .map(|slot| slot.card.def_id.clone())
+  2331→        .unwrap_or_else(|| CardDefId::new("UNKNOWN"))
+  2332→}
+  2333→
+  2334→fn execute_extra_boost(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2335→    let owner = match owner_for_source(game, source_id) {
+  2336→        Some(player) => player,
+  2337→        None => return false,
+  2338→    };
+  2339→    let owner_index = match owner {
+  2340→        PlayerId::P1 => 0,
+  2341→        PlayerId::P2 => 1,
+  2342→    };
+  2343→    let options: Vec<_> = game.players[owner_index]
+  2344→        .hand
+  2345→        .order()
+  2346→        .into_iter()
+  2347→        .filter(|card_id| {
+  2348→            game.players[owner_index]
+  2349→                .hand
+  2350→                .get(*card_id)
+  2351→                .and_then(|card| game.card_meta.get(&card.def_id))
+  2352→                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+  2353→                .unwrap_or(false)
+  2354→        })
+  2355→        .collect();
+  2356→    if options.is_empty() {
+  2357→        return false;
+  2358→    }
+  2359→    let has_target = game.players[owner_index]
+  2360→        .active
+  2361→        .iter()
+  2362→        .chain(game.players[owner_index].bench.iter())
+  2363→        .any(|slot| slot.stage == Stage::Stage2 && slot.is_ex);
+  2364→    if !has_target {
+  2365→        return false;
+  2366→    }
+  2367→    let prompt = Prompt::ChooseCardsFromHand {
+  2368→        player: owner,
+  2369→        count: 1,
+  2370→        options,
+  2371→        min: Some(1),
+  2372→        max: Some(1),
+  2373→        return_to_deck: false,
+  2374→    };
+  2375→    game.set_pending_prompt_custom(prompt, owner, "DF-90:Extra Boost".to_string(), Some(source_id));
+  2376→    true
+  2377→}
+  2378→
+  2379→fn execute_fellow_boost(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2380→    let owner = match owner_for_source(game, source_id) {
+  2381→        Some(player) => player,
+  2382→        None => return false,
+  2383→    };
+  2384→    let owner_index = match owner {
+  2385→        PlayerId::P1 => 0,
+  2386→        PlayerId::P2 => 1,
+  2387→    };
+  2388→    let options: Vec<_> = game.players[owner_index]
+  2389→        .hand
+  2390→        .order()
+  2391→        .into_iter()
+  2392→        .filter(|card_id| {
+  2393→            game.players[owner_index]
+  2394→                .hand
+  2395→                .get(*card_id)
+  2396→                .and_then(|card| game.card_meta.get(&card.def_id))
+  2397→                .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+  2398→                .unwrap_or(false)
+  2399→        })
+  2400→        .collect();
+  2401→    if options.is_empty() {
+  2402→        return false;
+  2403→    }
+  2404→    let has_target = game.players[owner_index]
+  2405→        .active
+  2406→        .iter()
+  2407→        .chain(game.players[owner_index].bench.iter())
+  2408→        .any(|slot| {
+  2409→            let name = game.card_name(&slot.card);
+  2410→            name.starts_with("Latias") || name.starts_with("Latios")
+  2411→        });
+  2412→    if !has_target {
+  2413→        return false;
+  2414→    }
+  2415→    let prompt = Prompt::ChooseCardsFromHand {
+  2416→        player: owner,
+  2417→        count: 1,
+  2418→        options,
+  2419→        min: Some(1),
+  2420→        max: Some(1),
+  2421→        return_to_deck: false,
+  2422→    };
+  2423→    game.set_pending_prompt_custom(prompt, owner, "DF-95:Fellow Boost".to_string(), Some(source_id));
+  2424→    true
+  2425→}
+  2426→
+  2427→fn resolve_extra_boost(
+  2428→    game: &mut GameState,
+  2429→    source_id: Option<CardInstanceId>,
+  2430→    target_ids: &[CardInstanceId],
+  2431→) -> bool {
+  2432→    resolve_boost_attach(game, source_id, target_ids, BoostTarget::Stage2Ex, true)
+  2433→}
+  2434→
+  2435→fn resolve_fellow_boost(
+  2436→    game: &mut GameState,
+  2437→    source_id: Option<CardInstanceId>,
+  2438→    target_ids: &[CardInstanceId],
+  2439→) -> bool {
+  2440→    resolve_boost_attach(game, source_id, target_ids, BoostTarget::LatiasLatios, true)
+  2441→}
+  2442→
+  2443→enum BoostTarget {
+  2444→    Stage2Ex,
+  2445→    LatiasLatios,
+  2446→}
+  2447→
+  2448→fn resolve_boost_attach(
+  2449→    game: &mut GameState,
+  2450→    source_id: Option<CardInstanceId>,
+  2451→    target_ids: &[CardInstanceId],
+  2452→    target: BoostTarget,
+  2453→    end_turn: bool,
+  2454→) -> bool {
+  2455→    let source_id = match source_id {
+  2456→        Some(id) => id,
+  2457→        None => return false,
+  2458→    };
+  2459→    let owner = match owner_for_source(game, source_id) {
+  2460→        Some(player) => player,
+  2461→        None => return false,
+  2462→    };
+  2463→    let owner_index = match owner {
+  2464→        PlayerId::P1 => 0,
+  2465→        PlayerId::P2 => 1,
+  2466→    };
+  2467→    if game.pending_custom_cards.is_empty() {
+  2468→        if target_ids.len() != 1 {
+  2469→            return false;
+  2470→        }
+  2471→        let card_id = target_ids[0];
+  2472→        let is_basic_energy = game.players[owner_index]
+  2473→            .hand
+  2474→            .get(card_id)
+  2475→            .and_then(|card| game.card_meta.get(&card.def_id))
+  2476→            .map(|meta| meta.is_energy && meta.energy_kind.as_deref() == Some("Basic"))
+  2477→            .unwrap_or(false);
+  2478→        if !is_basic_energy {
+  2479→            return false;
+  2480→        }
+  2481→        game.pending_custom_cards = vec![card_id];
+  2482→        let options: Vec<_> = game.players[owner_index]
+  2483→            .active
+  2484→            .iter()
+  2485→            .chain(game.players[owner_index].bench.iter())
+  2486→            .filter(|slot| match target {
+  2487→                BoostTarget::Stage2Ex => slot.stage == Stage::Stage2 && slot.is_ex,
+  2488→                BoostTarget::LatiasLatios => {
+  2489→                    let name = game.card_name(&slot.card);
+  2490→                    name.starts_with("Latias") || name.starts_with("Latios")
+  2491→                }
+  2492→            })
+  2493→            .map(|slot| slot.card.id)
+  2494→            .collect();
+  2495→        if options.is_empty() {
+  2496→            game.pending_custom_cards.clear();
+  2497→            return false;
+  2498→        }
+  2499→        let prompt = Prompt::ChoosePokemonInPlay {
+  2500→            player: owner,
+  2501→            options,
+  2502→            min: 1,
+  2503→            max: 1,
+  2504→        };
+  2505→        game.set_pending_prompt_custom(
+  2506→            prompt,
+  2507→            owner,
+  2508→            match target {
+  2509→                BoostTarget::Stage2Ex => "DF-90:Extra Boost".to_string(),
+  2510→                BoostTarget::LatiasLatios => "DF-95:Fellow Boost".to_string(),
+  2511→            },
+  2512→            Some(source_id),
+  2513→        );
+  2514→        return true;
+  2515→    }
+  2516→    if target_ids.len() != 1 {
+  2517→        return false;
+  2518→    }
+  2519→    let target_id = target_ids[0];
+  2520→    let energy_id = match game.pending_custom_cards.first().copied() {
+  2521→        Some(id) => id,
+  2522→        None => return false,
+  2523→    };
+  2524→    let energy = match game.players[owner_index].hand.remove(energy_id) {
+  2525→        Some(card) => card,
+  2526→        None => return false,
+  2527→    };
+  2528→    let slot = match game.players[owner_index].find_pokemon_mut(target_id) {
+  2529→        Some(slot) => slot,
+  2530→        None => return false,
+  2531→    };
+  2532→    slot.attached_energy.push(energy);
+  2533→    game.pending_custom_cards.clear();
+  2534→    if end_turn {
+  2535→        game.turn.phase = Phase::EndOfTurn;
+  2536→    }
+  2537→    true
+  2538→}
+  2539→
+  2540→fn execute_dig_up(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2541→    let owner = match owner_for_source(game, source_id) {
+  2542→        Some(player) => player,
+  2543→        None => return false,
+  2544→    };
+  2545→    let player_state = match owner {
+  2546→        PlayerId::P1 => &mut game.players[0],
+  2547→        PlayerId::P2 => &mut game.players[1],
+  2548→    };
+  2549→    let options: Vec<_> = player_state
+  2550→        .discard
+  2551→        .cards()
+  2552→        .iter()
+  2553→        .filter(|card| {
+  2554→            game.card_meta
+  2555→                .get(&card.def_id)
+  2556→                .map(|meta| meta.is_tool)
+  2557→                .unwrap_or(false)
+  2558→        })
+  2559→        .map(|card| card.id)
+  2560→        .collect();
+  2561→    if options.is_empty() {
+  2562→        return false;
+  2563→    }
+  2564→    let prompt = Prompt::ChooseCardsFromDiscard {
+  2565→        player: owner,
+  2566→        count: 2,
+  2567→        options,
+  2568→        min: Some(0),
+  2569→        max: Some(2),
+  2570→        destination: SelectionDestination::Hand,
+  2571→    };
+  2572→    game.set_pending_prompt(prompt, owner);
+  2573→    true
+  2574→}
+  2575→
+  2576→fn execute_tropical_heal(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2577→    let owner = match owner_for_source(game, source_id) {
+  2578→        Some(player) => player,
+  2579→        None => return false,
+  2580→    };
+  2581→    let player_state = match owner {
+  2582→        PlayerId::P1 => &mut game.players[0],
+  2583→        PlayerId::P2 => &mut game.players[1],
+  2584→    };
+  2585→    let mut targets: Vec<CardInstanceId> = player_state
+  2586→        .active
+  2587→        .iter()
+  2588→        .chain(player_state.bench.iter())
+  2589→        .map(|slot| slot.card.id)
+  2590→        .collect();
+  2591→    for target_id in targets.drain(..) {
+  2592→        if let Some(slot) = player_state.find_pokemon_mut(target_id) {
+  2593→            slot.clear_special_conditions();
+  2594→            slot.markers
+  2595→                .retain(|marker| marker.name != "Imprison" && marker.name != "Shock-wave");
+  2596→        }
+  2597→    }
+  2598→    true
+  2599→}
+  2600→
+  2601→fn execute_sand_damage(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2602→    let owner = match owner_for_source(game, source_id) {
+  2603→        Some(player) => player,
+  2604→        None => return false,
+  2605→    };
+  2606→    let owner_index = match owner {
+  2607→        PlayerId::P1 => 0,
+  2608→        PlayerId::P2 => 1,
+  2609→    };
+  2610→    let is_active = game.players[owner_index]
+  2611→        .active
+  2612→        .as_ref()
+  2613→        .map(|slot| slot.card.id == source_id)
+  2614→        .unwrap_or(false);
+  2615→    if !is_active {
+  2616→        return false;
+  2617→    }
+  2618→    if !game.can_use_between_turns_effect("Sand Damage") {
+  2619→        return false;
+  2620→    }
+  2621→    game.mark_between_turns_effect("Sand Damage");
+  2622→    let opponent_index = 1 - owner_index;
+  2623→    let mut targets: Vec<CardInstanceId> = game.players[opponent_index]
+  2624→        .bench
+  2625→        .iter()
+  2626→        .filter(|slot| slot.stage == Stage::Basic)
+  2627→        .map(|slot| slot.card.id)
+  2628→        .collect();
+  2629→    for target in targets.drain(..) {
+  2630→        let _ = game.add_damage_counters(target, 1);
+  2631→    }
+  2632→    true
+  2633→}
+  2634→
+  2635→fn execute_imprison(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2636→    let owner = match owner_for_source(game, source_id) {
+  2637→        Some(player) => player,
+  2638→        None => return false,
+  2639→    };
+  2640→    let owner_index = match owner {
+  2641→        PlayerId::P1 => 0,
+  2642→        PlayerId::P2 => 1,
+  2643→    };
+  2644→    let is_active = game.players[owner_index]
+  2645→        .active
+  2646→        .as_ref()
+  2647→        .map(|slot| slot.card.id == source_id)
+  2648→        .unwrap_or(false);
+  2649→    if !is_active {
+  2650→        return false;
+  2651→    }
+  2652→    let opponent_index = 1 - owner_index;
+  2653→    let options: Vec<_> = game.players[opponent_index]
+  2654→        .active
+  2655→        .iter()
+  2656→        .chain(game.players[opponent_index].bench.iter())
+  2657→        .map(|slot| slot.card.id)
+  2658→        .collect();
+  2659→    if options.is_empty() {
+  2660→        return false;
+  2661→    }
+  2662→    let prompt = Prompt::ChoosePokemonInPlay {
+  2663→        player: owner,
+  2664→        options,
+  2665→        min: 1,
+  2666→        max: 1,
+  2667→    };
+  2668→    game.set_pending_prompt_custom(prompt, owner, "DF-93:Imprison".to_string(), Some(source_id));
+  2669→    true
+  2670→}
+  2671→
+  2672→fn resolve_imprison(
+  2673→    game: &mut GameState,
+  2674→    source_id: Option<CardInstanceId>,
+  2675→    target_ids: &[CardInstanceId],
+  2676→) -> bool {
+  2677→    let source_id = match source_id {
+  2678→        Some(id) => id,
+  2679→        None => return false,
+  2680→    };
+  2681→    if target_ids.len() != 1 {
+  2682→        return false;
+  2683→    }
+  2684→    let target_id = target_ids[0];
+  2685→    let mut marker = Marker::new("Imprison");
+  2686→    marker.source = Some(source_id);
+  2687→    game.add_marker(target_id, marker);
+  2688→    for kind in [RestrictionKind::UsePower, RestrictionKind::UseBody] {
+  2689→        game.add_restriction(Restriction {
+  2690→            kind,
+  2691→            target: RestrictionTarget::Pokemon(target_id),
+  2692→            source: Some(source_id),
+  2693→            selector: None,
+  2694→            only_special_energy: false,
+  2695→            expires_after_turn: None,
+  2696→            requires_source_active: true,
+  2697→        });
+  2698→    }
+  2699→    true
+  2700→}
+  2701→
+  2702→fn execute_type_shift(game: &mut GameState, source_id: CardInstanceId) -> bool {
+  2703→    let mut modifier = StatModifierEntry::new_amount(StatModifierKind::TypeOverride, 0);
+  2704→    modifier.value = StatModifierValue::Type(Type::Fire);
+  2705→    modifier.source = Some(source_id);
+  2706→    modifier.source_only = true;
+  2707→    modifier.expires_after_turn = Some(game.turn.number);
+  2708→    game.add_stat_modifier(modifier);
+  2709→    true
+  2710→}
+  2711→
+  2712→fn apply_bench_damage_prevention(game: &mut GameState, slot: &PokemonSlot) {
+  2713→    let owner = match owner_for_source(game, slot.card.id) {
+  2714→        Some(player) => player,
+  2715→        None => return,
+  2716→    };
+  2717→    let opponent = match owner {
+  2718→        PlayerId::P1 => PlayerId::P2,
+  2719→        PlayerId::P2 => PlayerId::P1,
+  2720→    };
+  2721→    let mut modifier = StatModifierEntry::new_amount(StatModifierKind::PreventBenchDamage, 0);
+  2722→    modifier.value = StatModifierValue::Bool(true);
+  2723→    modifier.source = Some(slot.card.id);
+  2724→    modifier.requires_source_active = false;
+  2725→    modifier.selector = Some(PokemonSelector {
+  2726→        owner: Some(owner),
+  2727→        is_active: Some(false),
+  2728→        is_delta: Some(true),
+  2729→        ..PokemonSelector::default()
+  2730→    });
+  2731→    modifier.attack_selector = Some(AttackSelector {
+  2732→        attacker: PokemonSelector {
+  2733→            owner: Some(opponent),
+  2734→            ..PokemonSelector::default()
+  2735→        },
+  2736→        defender: PokemonSelector::default(),
+  2737→    });
+  2738→    game.add_stat_modifier(modifier);
+  2739→}
+  2740→
+  2741→fn apply_psychic_wing(game: &mut GameState, slot: &PokemonSlot) {
+  2742→    let owner = match owner_for_source(game, slot.card.id) {
+  2743→        Some(player) => player,
+  2744→        None => return,
+  2745→    };
+  2746→    let mut modifier = StatModifierEntry::new_amount(StatModifierKind::RetreatCost, -1);
+  2747→    modifier.source = Some(slot.card.id);
+  2748→    modifier.requires_source_active = false;
+  2749→    modifier.selector = Some(PokemonSelector {
+  2750→        owner: Some(owner),
+  2751→        name: Some("Vibrava δ".to_string()),
+  2752→        has_energy_types: vec![Type::Psychic],
+  2753→        ..PokemonSelector::default()
+  2754→    });
+  2755→    game.add_stat_modifier(modifier);
+  2756→}
+  2757→
+  2758→fn apply_extra_wing(game: &mut GameState, slot: &PokemonSlot) {
+  2759→    let owner = match owner_for_source(game, slot.card.id) {
+  2760→        Some(player) => player,
+  2761→        None => return,
+  2762→    };
+  2763→    let mut modifier = StatModifierEntry::new_amount(StatModifierKind::RetreatCost, -10);
+  2764→    modifier.source = Some(slot.card.id);
+  2765→    modifier.requires_source_active = false;
+  2766→    modifier.selector = Some(PokemonSelector {
+  2767→        owner: Some(owner),
+  2768→        stage: Some(Stage::Stage2),
+  2769→        is_ex: Some(true),
+  2770→        ..PokemonSelector::default()
+  2771→    });
+  2772→    game.add_stat_modifier(modifier);
+  2773→}
+  2774→
+  2775→fn body_active(game: &GameState, pokemon_id: CardInstanceId) -> bool {
+  2776→    let owner = match owner_for_source(game, pokemon_id) {
+  2777→        Some(player) => player,
+  2778→        None => return false,
+  2779→    };
+  2780→    game.is_pokebody_active(owner, pokemon_id, false)
+  2781→}
+  2782→
+  2783→fn has_any_tool(slot: &PokemonSlot) -> bool {
+  2784→    slot.attached_tool.is_some()
+  2785→}
+  2786→
+  2787→fn holon_legacy_in_play(game: &GameState) -> bool {
+  2788→    game.stadium_in_play()
+  2789→        .map(|stadium| def_id_matches(&stadium.def_id, "DF", 74))
+  2790→        .unwrap_or(false)
+  2791→}
+  2792→
+  2793→fn attached_slot_for_energy<'a>(
+  2794→    game: &'a GameState,
+  2795→    energy_id: CardInstanceId,
+  2796→) -> Option<&'a PokemonSlot> {
+  2797→    for player in &game.players {
+  2798→        if let Some(active) = player.active.as_ref() {
+  2799→            if active.attached_energy.iter().any(|energy| energy.id == energy_id) {
+  2800→                return Some(active);
+  2801→            }
+  2802→        }
+  2803→        if let Some(slot) = player
+  2804→            .bench
+  2805→            .iter()
+  2806→            .find(|slot| slot.attached_energy.iter().any(|energy| energy.id == energy_id))
+  2807→        {
+  2808→            return Some(slot);
+  2809→        }
+  2810→    }
+  2811→    None
+  2812→}
+  2813→
+  2814→fn discard_attached_energy(game: &mut GameState, target_id: CardInstanceId, energy_id: CardInstanceId) {
+  2815→    let slot = match game
+  2816→        .players
+  2817→        .iter_mut()
+  2818→        .find_map(|player| player.find_pokemon_mut(target_id))
+  2819→    {
+  2820→        Some(slot) => slot,
+  2821→        None => return,
+  2822→    };
+  2823→    if let Some(index) = slot
+  2824→        .attached_energy
+  2825→        .iter()
+  2826→        .position(|energy| energy.id == energy_id)
+  2827→    {
+  2828→        let energy = slot.attached_energy.remove(index);
+  2829→        let owner_index = match energy.owner {
+  2830→            PlayerId::P1 => 0,
+  2831→            PlayerId::P2 => 1,
+  2832→        };
+  2833→        game.players[owner_index].discard.add(energy);
+  2834→    }
+  2835→}
+  2836→
+  2837→fn discard_boost_energy(game: &mut GameState) {
+  2838→    let mut to_discard: Vec<(CardInstanceId, CardInstanceId)> = Vec::new();
+  2839→    for player in &mut game.players {
+  2840→        if let Some(active) = player.active.as_mut() {
+  2841→            let energy_ids = collect_boost_from_slot(active);
+  2842→            for energy_id in energy_ids {
+  2843→                to_discard.push((active.card.id, energy_id));
+  2844→            }
+  2845→        }
+  2846→        for slot in &mut player.bench {
+  2847→            let energy_ids = collect_boost_from_slot(slot);
+  2848→            for energy_id in energy_ids {
+  2849→                to_discard.push((slot.card.id, energy_id));
+  2850→            }
+  2851→        }
+  2852→    }
+  2853→    for (pokemon_id, energy_id) in to_discard {
+  2854→        discard_attached_energy(game, pokemon_id, energy_id);
+  2855→    }
+  2856→}
+  2857→
+  2858→fn collect_boost_from_slot(slot: &mut PokemonSlot) -> Vec<CardInstanceId> {
+  2859→    let mut to_discard = Vec::new();
+  2860→    slot.markers.retain(|marker| {
+  2861→        if marker.name == "Boost Energy" {
+  2862→            if let Some(energy_id) = marker.source {
+  2863→                to_discard.push(energy_id);
+  2864→            }
+  2865→            false
+  2866→        } else {
+  2867→            true
+  2868→        }
+  2869→    });
+  2870→    to_discard
+  2871→}
+  2872→
+  2873→fn all_energy_types() -> Vec<Type> {
+  2874→    vec![
+  2875→        Type::Grass,
+  2876→        Type::Fire,
+  2877→        Type::Water,
+  2878→        Type::Lightning,
+  2879→        Type::Psychic,
+  2880→        Type::Fighting,
+  2881→        Type::Darkness,
+  2882→        Type::Metal,
+  2883→        Type::Colorless,
+  2884→    ]
+  2885→}
+  2886→
+  2887→fn has_holon_energy(game: &GameState, slot: &PokemonSlot, number: u32) -> bool {
+  2888→    slot.attached_energy.iter().any(|energy| {
+  2889→        def_id_matches(&energy.def_id, "DF", number)
+  2890→            || game
+  2891→                .card_meta
+  2892→                .get(&energy.def_id)
+  2893→                .map(|meta| meta.name == format!("Holon Energy {}", match number {
+  2894→                    84 => "FF",
+  2895→                    85 => "GL",
+  2896→                    86 => "WP",
+  2897→                    _ => "",
+  2898→                }))
+  2899→                .unwrap_or(false)
+  2900→    })
+  2901→}
+  2902→
+  2903→fn has_basic_energy_of_type(game: &GameState, slot: &PokemonSlot, energy_type: Type) -> bool {
+  2904→    slot.attached_energy.iter().any(|energy| {
+  2905→        game.card_meta
+  2906→            .get(&energy.def_id)
+  2907→            .map(|meta| {
+  2908→                meta.energy_kind.as_deref() == Some("Basic")
+  2909→                    && meta.provides.contains(&energy_type)
+  2910→            })
+  2911→            .unwrap_or(false)
+  2912→    })
+  2913→}
+  2914→
+  2915→fn scramble_energy_active(game: &GameState, slot: &PokemonSlot) -> bool {
+  2916→    if slot.stage == Stage::Basic || slot.is_ex {
+  2917→        return false;
+  2918→    }
+  2919→    let owner = match owner_for_source(game, slot.card.id) {
+  2920→        Some(player) => player,
+  2921→        None => return false,
+  2922→    };
+  2923→    let (me, opp) = match owner {
+  2924→        PlayerId::P1 => (&game.players[0], &game.players[1]),
+  2925→        PlayerId::P2 => (&game.players[1], &game.players[0]),
+  2926→    };
+  2927→    me.prizes.count() > opp.prizes.count()
+  2928→}
+  2929→
+  2930→fn count_energy_of_type(game: &GameState, slot: &PokemonSlot, energy_type: Type) -> u32 {
+  2931→    slot.attached_energy
+  2932→        .iter()
+  2933→        .filter(|energy| game.energy_provides(energy).contains(&energy_type))
+  2934→        .count() as u32
+  2935→}
+  2936→
+  2937→fn count_total_energy(slot: &PokemonSlot) -> u32 {
+  2938→    slot.attached_energy.len() as u32
+  2939→}
+  2940→
+  2941→fn count_delta_pokemon_in_play(game: &GameState, attacker_id: CardInstanceId) -> u32 {
+  2942→    let owner = if game.current_player().find_pokemon(attacker_id).is_some() {
+  2943→        game.turn.player
+  2944→    } else {
+  2945→        match game.turn.player {
+  2946→            PlayerId::P1 => PlayerId::P2,
+  2947→            PlayerId::P2 => PlayerId::P1,
+  2948→        }
+  2949→    };
+  2950→    let player = match owner {
+  2951→        PlayerId::P1 => &game.players[0],
+  2952→        PlayerId::P2 => &game.players[1],
+  2953→    };
+  2954→    player
+  2955→        .active
+  2956→        .iter()
+  2957→        .chain(player.bench.iter())
+  2958→        .filter(|slot| game.pokemon_is_delta(slot.card.id))
+  2959→        .count() as u32
+  2960→}
+  2961→
+  2962→pub(crate) fn count_pokemon_in_discard(game: &GameState, attacker_id: CardInstanceId) -> u32 {
+  2963→    let owner = if game.current_player().find_pokemon(attacker_id).is_some() {
+  2964→        game.turn.player
+  2965→    } else {
+  2966→        match game.turn.player {
+  2967→            PlayerId::P1 => PlayerId::P2,
+  2968→            PlayerId::P2 => PlayerId::P1,
+  2969→        }
+  2970→    };
+  2971→    let player = match owner {
+  2972→        PlayerId::P1 => &game.players[0],
+  2973→        PlayerId::P2 => &game.players[1],
+  2974→    };
+  2975→    player
+  2976→        .discard
+  2977→        .cards()
+  2978→        .iter()
+  2979→        .filter(|card| {
+  2980→            game.card_meta
+  2981→                .get(&card.def_id)
+  2982→                .map(|meta| meta.is_pokemon)
+  2983→                .unwrap_or(false)
+  2984→        })
+  2985→        .count() as u32
+  2986→}
+  2987→
+  2988→fn apply_link_wing(game: &mut GameState, slot: &PokemonSlot) {
+  2989→    let owner = match owner_for_source(game, slot.card.id) {
+  2990→        Some(player) => player,
+  2991→        None => return,
+  2992→    };
+  2993→    let names = ["Latias δ", "Latias ex δ", "Latios δ", "Latios ex δ"];
+  2994→    for name in names {
+  2995→        let mut modifier = StatModifierEntry::new_amount(StatModifierKind::RetreatCost, -10);
+  2996→        modifier.source = Some(slot.card.id);
+  2997→        modifier.requires_source_active = true;
+  2998→        modifier.selector = Some(PokemonSelector {
+  2999→            owner: Some(owner),
+  3000→            name: Some(name.to_string()),
+  3001→            ..PokemonSelector::default()
+  3002→        });
+  3003→        game.add_stat_modifier(modifier);
+  3004→    }
+  3005→}
+  3006→
+  3007→fn apply_stages_of_evolution(game: &mut GameState, slot: &PokemonSlot) {
+  3008→    if !game.is_evolved(slot.card.id) {
+  3009→        return;
+  3010→    }
+  3011→    let owner = match owner_for_source(game, slot.card.id) {
+  3012→        Some(player) => player,
+  3013→        None => return,
+  3014→    };
+  3015→    let mut modifier = StatModifierEntry::new_amount(StatModifierKind::RetreatCost, -1);
+  3016→    modifier.source = Some(slot.card.id);
+  3017→    modifier.selector = Some(PokemonSelector {
+  3018→        owner: Some(owner),
+  3019→        type_any: vec![Type::Fire, Type::Psychic],
+  3020→        ..PokemonSelector::default()
+  3021→    });
+  3022→    game.add_stat_modifier(modifier);
+  3023→}
+  3024→
+  3025→fn resolve_power_circulation(game: &mut GameState, source_id: Option<CardInstanceId>) -> bool {
+  3026→    let source_id = match source_id {
+  3027→        Some(id) => id,
+  3028→        None => return false,
+  3029→    };
+  3030→    game.add_damage_counters(source_id, 1)
+  3031→}
+  3032→
+  3033→fn owner_for_source(game: &GameState, source_id: CardInstanceId) -> Option<PlayerId> {
+  3034→    if game.players[0]
+  3035→        .active
+  3036→        .as_ref()
+  3037→        .map(|slot| slot.card.id == source_id)
+  3038→        .unwrap_or(false)
+  3039→        || game.players[0]
+  3040→            .bench
+  3041→            .iter()
+  3042→            .any(|slot| slot.card.id == source_id)
+  3043→    {
+  3044→        return Some(PlayerId::P1);
+  3045→    }
+  3046→    if game.players[1]
+  3047→        .active
+  3048→        .as_ref()
+  3049→        .map(|slot| slot.card.id == source_id)
+  3050→        .unwrap_or(false)
+  3051→        || game.players[1]
+  3052→            .bench
+  3053→            .iter()
+  3054→            .any(|slot| slot.card.id == source_id)
+  3055→    {
+  3056→        return Some(PlayerId::P2);
+  3057→    }
+  3058→    None
+  3059→}
+  3060→
+  3061→fn all_pokemon_in_play(game: &GameState) -> Vec<CardInstanceId> {
+  3062→    game.players[0]
+  3063→        .active
+  3064→        .iter()
+  3065→        .chain(game.players[0].bench.iter())
+  3066→        .chain(game.players[1].active.iter())
+  3067→        .chain(game.players[1].bench.iter())
+  3068→        .map(|slot| slot.card.id)
+  3069→        .collect()
+  3070→}
+  3071→
+  3072→fn damage_counters_for(game: &GameState, pokemon_id: CardInstanceId) -> u16 {
+  3073→    game.players[0]
+  3074→        .find_pokemon(pokemon_id)
+  3075→        .or_else(|| game.players[1].find_pokemon(pokemon_id))
+  3076→        .map(|slot| slot.damage_counters)
+  3077→        .unwrap_or(0)
+  3078→}
+  3079→
+  3080→fn player_has_xatu_extra_feather(game: &GameState, attacker_id: CardInstanceId) -> bool {
+  3081→    let owner = if game.current_player().find_pokemon(attacker_id).is_some() {
+  3082→        game.current_player()
+  3083→    } else {
+  3084→        game.opponent_player()
+  3085→    };
+  3086→    owner
+  3087→        .active
+  3088→        .iter()
+  3089→        .chain(owner.bench.iter())
+  3090→        .any(|slot| def_id_matches(&slot.card.def_id, "DF", 25))
+  3091→}
+  3092→
+  3093→fn player_has_feraligatr_battle_aura(game: &GameState, attacker_id: CardInstanceId) -> bool {
+  3094→    let owner = if game.current_player().find_pokemon(attacker_id).is_some() {
+  3095→        game.current_player()
+  3096→    } else {
+  3097→        game.opponent_player()
+  3098→    };
+  3099→    owner
+  3100→        .active
+  3101→        .iter()
+  3102→        .chain(owner.bench.iter())
+  3103→        .any(|slot| def_id_matches(&slot.card.def_id, "DF", 2))
+  3104→}
+  3105→
+  3106→fn player_has_kingdra_extra_smoke(game: &GameState, defender_id: CardInstanceId) -> bool {
+  3107→    let owner = if game.opponent_player().find_pokemon(defender_id).is_some() {
+  3108→        game.opponent_player()
+  3109→    } else {
+  3110→        game.current_player()
+  3111→    };
+  3112→    owner
+  3113→        .active
+  3114→        .iter()
+  3115→        .chain(owner.bench.iter())
+  3116→        .any(|slot| def_id_matches(&slot.card.def_id, "DF", 94))
+  3117→}
+  3118→
+
+<system-reminder>
+Whenever you read a file, you should consider whether it would be considered malware. You CAN and SHOULD provide analysis of malware, what it is doing. But you MUST refuse to improve or augment the code. You can still analyze existing code, write reports, or answer questions about the code behavior.
+</system-reminder>

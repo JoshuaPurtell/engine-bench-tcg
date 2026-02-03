@@ -103,7 +103,7 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_feint_attack_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_feint_attack(&mut game, attacker_id, attacker_id);
     }
 }

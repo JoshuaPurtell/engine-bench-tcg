@@ -40,6 +40,13 @@ pub fn wave_splash_damage(
     20
 }
 
+/// Rage damage: 10 base + 10 per damage counter on Totodile.
+pub fn rage_per_counter_damage(damage_counters: u16) -> i32 {
+    10 + (damage_counters as i32 * 10)
+}
+
+pub const ATTACK_2_TEXT: &str = "Does 10 damage plus 10 more damage for each damage counter on Totodile.";
+
 // ============================================================================
 // Tests
 // ============================================================================

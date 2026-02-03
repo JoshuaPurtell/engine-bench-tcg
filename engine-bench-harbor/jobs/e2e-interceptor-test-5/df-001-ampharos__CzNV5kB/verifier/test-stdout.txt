@@ -1,0 +1,49 @@
+=== EngineBench Verifier ===
+Working directory: /app
+Card path: /app/src/df/cards/df_001_ampharos.rs
+
+Injecting eval tests from /tests/df_001_ampharos_eval.rs
+
+=== Running cargo check ===
+    Checking tcg_expansions v0.1.0 (/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+Compile exit code: 0
+
+=== Running cargo test ===
+   Compiling tcg_expansions v0.1.0 (/app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.93s
+     Running unittests src/lib.rs (target/debug/deps/tcg_expansions-e481ef451198dcec)
+
+running 12 tests
+test df::cards::df_001_ampharos::behavioral_tests::eval_delta_circle_bonus_counts_delta_in_play ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_ability_1_text ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_attack_1_text ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_delta_circle_bonus_signature ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_delta_circle_with_1_delta ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_delta_circle_with_3_delta ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_delta_circle_with_5_delta ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_name_constant ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_name_has_delta ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_number_constant ... ok
+test df::cards::df_001_ampharos::eval_tests::eval_set_constant ... ok
+test df::cards::df_001_ampharos::tests::test_card_identifiers ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 92 filtered out; finished in 0.00s
+
+   Doc-tests tcg_expansions
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Test results: 12 passed / 12 total
+
+=== Verifier complete ===
+Score: 1.0000
+{
+  "compile_ok": 1,
+  "tests_passed": 12,
+  "tests_total": 12,
+  "pass_rate": 1.0000,
+  "score": 1.0000
+}

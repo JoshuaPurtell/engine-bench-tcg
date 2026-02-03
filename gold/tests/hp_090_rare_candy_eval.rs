@@ -106,7 +106,7 @@ mod eval_tests {
     #[test]
     fn eval_can_play_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = can_play(&game, attacker_id, attacker_id);
         assert!(!result, "can_play should return false with basic game state");
     }

@@ -105,7 +105,7 @@ mod eval_tests {
 
     #[test]
     fn eval_apply_toxic_sludge_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = apply_toxic_sludge(&mut game, attacker_id);
     }
 

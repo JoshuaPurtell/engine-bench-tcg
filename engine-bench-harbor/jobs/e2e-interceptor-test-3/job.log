@@ -1,0 +1,5 @@
+Creating new AsyncDaytona client
+Trial df-001-ampharos__ovqMgoz failed: API key or JWT token is required
+Failed to download logs to jobs/e2e-interceptor-test-3/df-001-ampharos__ovqMgoz/agent
+Sandbox not found. Please build the environment first.
+Not retrying trial because the maximum number of retries has been reached

@@ -106,7 +106,7 @@ mod eval_tests {
     #[test]
     fn eval_is_clear_body_active_baseline_false() {
         // With a basic game state (no special setup), should return false
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let result = is_clear_body_active(&game, attacker_id);
         assert!(!result, "is_clear_body_active should return false with basic game state");
     }

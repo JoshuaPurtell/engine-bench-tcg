@@ -38,9 +38,8 @@ pub fn execute(game: &mut GameState) -> Result<(), String> {
 
 /// Check if TV Reporter can be played.
 pub fn can_play(game: &GameState) -> bool {
-    // Can always be played (even if deck is empty, draw just draws less)
-    // Only restriction is one Supporter per turn
-    !game.current_player().played_supporter_this_turn
+    // Need cards in deck to draw, and only one Supporter per turn
+    game.current_player().deck.count() > 0 && !game.current_player().played_supporter_this_turn
 }
 
 // ============================================================================

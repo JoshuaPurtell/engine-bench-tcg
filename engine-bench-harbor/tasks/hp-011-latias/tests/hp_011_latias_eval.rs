@@ -216,21 +216,21 @@ mod eval_tests {
 
     #[test]
     fn eval_is_dual_aura_active_false_without_latios() {
-        let (game, latias_id, _) = create_test_game_with_latios(false, false);
+        let (mut game, latias_id, _) = create_test_game_with_latios(false, false);
         let result = is_dual_aura_active(&game, latias_id);
         assert!(!result, "Dual Aura should NOT be active without Latios in play");
     }
 
     #[test]
     fn eval_is_dual_aura_active_true_with_latios() {
-        let (game, latias_id, _) = create_test_game_with_latios(true, false);
+        let (mut game, latias_id, _) = create_test_game_with_latios(true, false);
         let result = is_dual_aura_active(&game, latias_id);
         assert!(result, "Dual Aura should be active when Latios is in play");
     }
 
     #[test]
     fn eval_is_dual_aura_active_true_with_latios_ex() {
-        let (game, latias_id, _) = create_test_game_with_latios(true, true);
+        let (mut game, latias_id, _) = create_test_game_with_latios(true, true);
         let result = is_dual_aura_active(&game, latias_id);
         assert!(result, "Dual Aura should be active when Latios ex is in play");
     }
@@ -241,21 +241,21 @@ mod eval_tests {
 
     #[test]
     fn eval_is_latios_true_for_latios() {
-        let (game, _, latios_id) = create_test_game_with_latios(true, false);
+        let (mut game, _, latios_id) = create_test_game_with_latios(true, false);
         let result = is_latios(&game, latios_id.unwrap());
         assert!(result, "is_latios should return true for Latios");
     }
 
     #[test]
     fn eval_is_latios_true_for_latios_ex() {
-        let (game, _, latios_id) = create_test_game_with_latios(true, true);
+        let (mut game, _, latios_id) = create_test_game_with_latios(true, true);
         let result = is_latios(&game, latios_id.unwrap());
         assert!(result, "is_latios should return true for Latios ex");
     }
 
     #[test]
     fn eval_is_latios_false_for_latias() {
-        let (game, latias_id, _) = create_test_game_with_latios(false, false);
+        let (mut game, latias_id, _) = create_test_game_with_latios(false, false);
         let result = is_latios(&game, latias_id);
         assert!(!result, "is_latios should return false for Latias");
     }
@@ -266,7 +266,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_body_basic_pokemon_allowed() {
-        let (game, latias_id, evolved_id, _) = create_test_game_with_evolved_pokemon();
+        let (mut game, latias_id, evolved_id, _) = create_test_game_with_evolved_pokemon();
         // Basic Pokemon (Latias) should always be able to use bodies
         let result = can_use_body_under_dual_aura(&game, latias_id, latias_id);
         assert!(result, "Basic Pokemon should be able to use Poke-Bodies under Dual Aura");
@@ -274,7 +274,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_body_evolved_ex_allowed() {
-        let (game, latias_id, _, ex_id) = create_test_game_with_evolved_pokemon();
+        let (mut game, latias_id, _, ex_id) = create_test_game_with_evolved_pokemon();
         // Pokemon-ex should always be able to use bodies
         let result = can_use_body_under_dual_aura(&game, latias_id, ex_id);
         assert!(result, "Pokemon-ex should be able to use Poke-Bodies under Dual Aura");
@@ -282,7 +282,7 @@ mod eval_tests {
 
     #[test]
     fn eval_can_use_body_evolved_non_ex_blocked() {
-        let (game, latias_id, evolved_id, _) = create_test_game_with_evolved_pokemon();
+        let (mut game, latias_id, evolved_id, _) = create_test_game_with_evolved_pokemon();
         // Evolved non-ex Pokemon should NOT be able to use bodies when Dual Aura active
         let result = can_use_body_under_dual_aura(&game, latias_id, evolved_id);
         assert!(!result, "Evolved non-ex Pokemon should NOT be able to use Poke-Bodies under Dual Aura");

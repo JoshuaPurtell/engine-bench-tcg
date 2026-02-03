@@ -18,6 +18,13 @@ pub fn mind_shock_ignores_weakness_resistance() -> bool {
     true
 }
 
+/// Flickering Flames inflicts Asleep condition.
+pub fn flickering_flames_condition() -> tcg_rules_ex::SpecialCondition {
+    tcg_rules_ex::SpecialCondition::Asleep
+}
+
+pub const ATTACK_1_TEXT: &str = "The Defending Pokémon is now Asleep.";
+
 #[cfg(test)]
 mod tests {
     use super::*;

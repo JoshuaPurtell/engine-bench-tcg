@@ -1,0 +1,87 @@
+{
+    "id": "dab64110-759e-4008-a5ea-b6b13e0f654f",
+    "task_name": "df-001-ampharos",
+    "trial_name": "df-001-ampharos__SbWfQPy",
+    "trial_uri": "file:///Users/joshpurtell/Documents/GitHub/engine-bench/engine-bench-harbor/jobs/e2e-interceptor-test/df-001-ampharos__SbWfQPy",
+    "task_id": {
+        "path": "tasks/df-001-ampharos"
+    },
+    "source": null,
+    "task_checksum": "261d297f50ef5bdb83ca662332423c7f7c3c9dc51b0048939815182070ae2de9",
+    "config": {
+        "task": {
+            "path": "tasks/df-001-ampharos",
+            "git_url": null,
+            "git_commit_id": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "df-001-ampharos__SbWfQPy",
+        "trials_dir": "jobs/e2e-interceptor-test",
+        "timeout_multiplier": 1.0,
+        "agent": {
+            "name": "claude-code",
+            "import_path": null,
+            "model_name": null,
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "kwargs": {}
+        },
+        "environment": {
+            "type": "daytona",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "kwargs": {}
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "job_id": "a39b9181-29a7-4c9f-9d68-b9d82c32fb72"
+    },
+    "agent_info": {
+        "name": "claude-code",
+        "version": "unknown",
+        "model_info": null
+    },
+    "agent_result": {
+        "n_input_tokens": 0,
+        "n_cache_tokens": 0,
+        "n_output_tokens": 0,
+        "cost_usd": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.7667
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-02-01T00:30:31.802523Z",
+    "finished_at": "2026-02-01T00:31:29.305733Z",
+    "environment_setup": {
+        "started_at": "2026-02-01T00:30:31.810722Z",
+        "finished_at": "2026-02-01T00:30:53.420440Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-02-01T00:30:53.420457Z",
+        "finished_at": "2026-02-01T00:31:05.513609Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-02-01T00:31:05.513649Z",
+        "finished_at": "2026-02-01T00:31:07.338179Z"
+    },
+    "verifier": {
+        "started_at": "2026-02-01T00:31:09.353393Z",
+        "finished_at": "2026-02-01T00:31:29.096161Z"
+    }
+}

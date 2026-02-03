@@ -414,7 +414,7 @@ mod behavioral_tests {
     
     #[test]
     fn eval_trapinch_attack_values() {
-        let (game, attacker_id, _) = create_basic_test_game();
+        let (mut game, attacker_id, _) = create_basic_test_game();
         assert_eq!(bite_damage(&game, attacker_id), 10);
         assert_eq!(sand_tomb_damage(&game, attacker_id), 20);
     }

@@ -104,7 +104,7 @@ mod eval_tests {
 
     #[test]
     fn eval_execute_pay_day_draw_returns_bool() {
-        let (game, attacker_id) = create_basic_test_game();
+        let (mut game, attacker_id) = create_basic_test_game();
         let _result: bool = execute_pay_day_draw(&mut game, attacker_id);
     }
 }

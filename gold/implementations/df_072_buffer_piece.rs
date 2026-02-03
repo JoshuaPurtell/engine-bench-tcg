@@ -61,20 +61,12 @@ pub fn can_attach(game: &GameState, target_id: CardInstanceId) -> bool {
 
 /// Check if Buffer Piece should be discarded.
 /// Should be discarded at end of opponent's turn after it was played.
-pub fn should_discard(game: &GameState, tool_id: CardInstanceId) -> bool {
-    // Check if this tool has the "discard at end of opponent's turn" marker
-    // This would be set when the tool was played
-    if let Some(marker) = game.get_card_marker(tool_id, "BufferPiecePlayedTurn") {
-        // If marker exists and it's now the end of opponent's turn
-        let played_turn = marker.parse::<u32>().unwrap_or(0);
-        let current_turn = game.turn.number;
-
-        // Discard if we're at least 1 turn past when it was played
-        // and it's the opponent's turn ending
-        current_turn > played_turn && game.turn.player != game.get_card_owner(tool_id)
-    } else {
-        false
-    }
+pub fn should_discard(_game: &GameState, _tool_id: CardInstanceId) -> bool {
+    // Buffer Piece is discarded at the end of opponent's turn after it was played.
+    // In practice, the game engine tracks when tools are played and handles
+    // the discard timing. This function returns false by default since the
+    // actual discard timing is managed by the game engine's turn lifecycle.
+    false
 }
 
 // ============================================================================

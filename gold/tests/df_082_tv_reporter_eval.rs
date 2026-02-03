@@ -418,7 +418,8 @@ mod behavioral_tests {
     #[test]
     fn eval_tv_reporter_can_play_requires_deck() {
         let (mut game, _, _) = create_basic_test_game();
-        game.players[0].deck = tcg_core::zone::Zone::new();
+        // Empty the deck by drawing all cards
+        while game.players[0].deck.draw_top().is_some() {}
         assert!(!can_play(&game));
         add_to_deck(
             &mut game,

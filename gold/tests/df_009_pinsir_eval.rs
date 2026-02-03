@@ -138,35 +138,35 @@ mod eval_tests {
 
     #[test]
     fn eval_armor_with_5_cards_in_hand() {
-        let (game, defender_id) = create_test_game_with_hand_size(5);
+        let (mut game, defender_id) = create_test_game_with_hand_size(5);
         let reduction = armor_damage_reduction(&game, defender_id, true);
         assert_eq!(reduction, -30, "With 5 cards in opponent's hand, reduction should be -30, got {}", reduction);
     }
 
     #[test]
     fn eval_armor_with_6_cards_in_hand() {
-        let (game, defender_id) = create_test_game_with_hand_size(6);
+        let (mut game, defender_id) = create_test_game_with_hand_size(6);
         let reduction = armor_damage_reduction(&game, defender_id, true);
         assert_eq!(reduction, -30, "With 6 cards in opponent's hand, reduction should be -30, got {}", reduction);
     }
 
     #[test]
     fn eval_armor_with_4_cards_in_hand() {
-        let (game, defender_id) = create_test_game_with_hand_size(4);
+        let (mut game, defender_id) = create_test_game_with_hand_size(4);
         let reduction = armor_damage_reduction(&game, defender_id, true);
         assert_eq!(reduction, 0, "With 4 cards in opponent's hand, reduction should be 0, got {}", reduction);
     }
 
     #[test]
     fn eval_armor_with_0_cards_in_hand() {
-        let (game, defender_id) = create_test_game_with_hand_size(0);
+        let (mut game, defender_id) = create_test_game_with_hand_size(0);
         let reduction = armor_damage_reduction(&game, defender_id, true);
         assert_eq!(reduction, 0, "With 0 cards in opponent's hand, reduction should be 0, got {}", reduction);
     }
 
     #[test]
     fn eval_armor_inactive() {
-        let (game, defender_id) = create_test_game_with_hand_size(5);
+        let (mut game, defender_id) = create_test_game_with_hand_size(5);
         let reduction = armor_damage_reduction(&game, defender_id, false);
         assert_eq!(reduction, 0, "With body inactive, reduction should be 0, got {}", reduction);
     }
