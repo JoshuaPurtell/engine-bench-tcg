@@ -1,6 +1,6 @@
 //! Metal Energy (Special) - Holon Phantoms #95
 
-use tcg_core::{CardInstanceId, GameState};
+use tcg_core::{CardInstanceId, GameState, Type};
 
 pub const SET: &str = "HP";
 pub const NUMBER: u32 = 95;
@@ -34,8 +34,8 @@ pub fn metal_energy_reduction(game: &GameState, defender_id: CardInstanceId) -> 
     0
 }
 
-pub fn qualifies_for_reduction(pokemon_types: &[String]) -> bool {
-    pokemon_types.iter().any(|t| t == "metal")
+pub fn qualifies_for_reduction(pokemon_types: &[Type]) -> bool {
+    pokemon_types.iter().any(|t| *t == Type::Metal)
 }
 
 #[cfg(test)]
@@ -43,8 +43,8 @@ mod tests {
     use super::*;
     #[test]
     fn test_qualifies() {
-        assert!(qualifies_for_reduction(&["metal".to_string()]));
-        assert!(qualifies_for_reduction(&["psychic".to_string(), "metal".to_string()]));
-        assert!(!qualifies_for_reduction(&["fire".to_string()]));
+        assert!(qualifies_for_reduction(&[Type::Metal]));
+        assert!(qualifies_for_reduction(&[Type::Psychic, Type::Metal]));
+        assert!(!qualifies_for_reduction(&[Type::Fire]));
     }
 }

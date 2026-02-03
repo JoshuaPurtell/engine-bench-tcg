@@ -44,7 +44,7 @@ pub fn execute_delta_draw(game: &mut GameState, player: PlayerId) {
     
     // Draw that many cards
     for _ in 0..delta_count {
-        game.draw_card(player);
+        game.draw_card(player_idx);
     }
 }
 

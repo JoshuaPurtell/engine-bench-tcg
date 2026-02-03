@@ -16,8 +16,9 @@ pub fn execute_splash_back(game: &mut GameState, source_id: CardInstanceId, targ
     if game.players[opponent_idx].bench[slot_idx].damage_counters == 0 { return false; }
     // Shuffle Pokemon and all attached cards into deck
     let slot = game.players[opponent_idx].bench.remove(slot_idx);
-    game.shuffle_into_deck(opponent_idx, slot.card);
-    for attached in slot.attached { game.shuffle_into_deck(opponent_idx, attached); }
+    game.players[opponent_idx].deck.add(slot.card);
+    for attached in slot.attached { game.players[opponent_idx].deck.add(attached); }
+    game.shuffle_deck(opponent_idx);
     true
 }
 pub fn splash_back_effect_id() -> String { format!("{}-{}:SplashBack", SET, NUMBER) }

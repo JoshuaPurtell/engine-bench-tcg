@@ -7,7 +7,7 @@
 mod eval_tests {
     use super::*;
     use tcg_core::{CardDefId, CardInstance, CardInstanceId, CardMeta, CardMetaMap, GameState, PlayerId, PokemonSlot, Stage, Type};
-    use tcg_core::zone::Zone;
+    use tcg_core::Zone;
     use tcg_rules_ex::RulesetConfig;
 
     // ========================================================================

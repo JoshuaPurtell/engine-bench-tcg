@@ -3,9 +3,9 @@ use tcg_core::{CardInstanceId, GameState, PlayerId, Prompt};
 pub const SET: &str = "HP"; pub const NUMBER: u32 = 48; pub const NAME: &str = "Persian δ";
 pub const SCRATCH_DRAW_DAMAGE: i32 = 30; pub const DECEIVE_COUNTERS: u32 = 4;
 pub fn execute_scratch_draw(game: &mut GameState, attacker_id: CardInstanceId) {
-    let (player, _) = find_owner(game, attacker_id).unwrap_or((PlayerId::P1, 0));
+    let (_, player_idx) = find_owner(game, attacker_id).unwrap_or((PlayerId::P1, 0));
     if game.stadium.as_ref().map(|s| game.card_meta.get(&s.def_id).map(|m| m.name.contains("Holon")).unwrap_or(false)).unwrap_or(false) {
-        game.draw_card(player);
+        game.draw_card(player_idx);
     }
 }
 pub fn execute_deceive(game: &mut GameState, attacker_id: CardInstanceId) {

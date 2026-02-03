@@ -1,6 +1,6 @@
 //! Darkness Energy (Special) - Holon Phantoms #94
 
-use tcg_core::{CardInstanceId, GameState};
+use tcg_core::{CardInstanceId, GameState, Type};
 
 pub const SET: &str = "HP";
 pub const NUMBER: u32 = 94;
@@ -36,8 +36,8 @@ pub fn darkness_energy_bonus(game: &GameState, attacker_id: CardInstanceId) -> i
     0
 }
 
-pub fn qualifies_for_bonus(pokemon_name: &str, pokemon_types: &[String]) -> bool {
-    pokemon_name.contains("Dark") || pokemon_types.iter().any(|t| t == "darkness")
+pub fn qualifies_for_bonus(pokemon_name: &str, pokemon_types: &[Type]) -> bool {
+    pokemon_name.contains("Dark") || pokemon_types.iter().any(|t| *t == Type::Darkness)
 }
 
 #[cfg(test)]
@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_qualifies() {
         assert!(qualifies_for_bonus("Dark Tyranitar", &[]));
-        assert!(qualifies_for_bonus("Mightyena", &["darkness".to_string()]));
-        assert!(!qualifies_for_bonus("Pikachu", &["lightning".to_string()]));
+        assert!(qualifies_for_bonus("Mightyena", &[Type::Darkness]));
+        assert!(!qualifies_for_bonus("Pikachu", &[Type::Lightning]));
     }
 }

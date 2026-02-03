@@ -4,9 +4,11 @@ pub const SET: &str = "HP"; pub const NUMBER: u32 = 63; pub const NAME: &str = "
 pub const SUPER_EGGSPLOSION_PER_ENERGY: i32 = 30;
 pub fn super_eggsplosion_damage(energy_count: u32) -> i32 { (energy_count as i32) * SUPER_EGGSPLOSION_PER_ENERGY }
 pub fn execute_super_eggsplosion(game: &mut GameState, source_id: CardInstanceId, target_id: CardInstanceId) -> bool {
-    // Discard all energy and count
-    let energy_count = game.discard_all_energy(source_id);
-    let damage = super_eggsplosion_damage(energy_count as u32);
+    // Count energy before discarding
+    let energy_count = game.get_attached_energy(source_id).len() as u32;
+    // Discard all energy
+    game.discard_all_energy(source_id);
+    let damage = super_eggsplosion_damage(energy_count);
     if damage > 0 { game.deal_damage(target_id, damage, source_id, true); }
     true
 }

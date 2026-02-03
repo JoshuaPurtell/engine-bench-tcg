@@ -1,6 +1,6 @@
 //! Mew ex - Holon Phantoms #100
 
-use tcg_core::{CardInstanceId, GameState, PlayerId, Prompt};
+use tcg_core::{CardInstanceId, GameState, PlayerId, Prompt, RevealedCard};
 
 pub const SET: &str = "HP";
 pub const NUMBER: u32 = 100;
@@ -27,9 +27,12 @@ pub fn execute_psychic_vision(game: &mut GameState, source_id: CardInstanceId) -
     }
     
     let opp_idx = 1 - player_idx;
-    let hand_cards: Vec<CardInstanceId> = game.players[opp_idx].hand.cards().iter()
-        .map(|c| c.id).collect();
-    
+    let hand_cards: Vec<RevealedCard> = game.players[opp_idx].hand.cards().iter()
+        .map(|c| {
+            let name = game.card_meta.get(&c.def_id).map(|m| m.name.clone()).unwrap_or_default();
+            RevealedCard { id: c.id, def_id: c.def_id.to_string(), name }
+        }).collect();
+
     let prompt = Prompt::RevealCards {
         player,
         cards: hand_cards,

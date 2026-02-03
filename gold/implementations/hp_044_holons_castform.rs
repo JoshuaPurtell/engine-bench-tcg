@@ -79,17 +79,29 @@ pub fn on_attach_as_energy(game: &mut GameState, card_id: CardInstanceId, target
     // If only one Energy, return it automatically
     if attached_energy.len() == 1 {
         let energy_id = attached_energy[0];
-        game.return_energy_to_hand(energy_id, target_id);
+        // Remove energy from pokemon
+        let mut removed_card = None;
+        if let Some(slot) = game.find_pokemon_mut(target_id) {
+            if let Some(pos) = slot.attached_energy.iter().position(|e| e.id == energy_id) {
+                removed_card = Some(slot.attached_energy.remove(pos));
+            }
+        }
+        // Add to hand
+        if let Some(card) = removed_card {
+            game.players[player_idx].hand.add(card);
+        }
         return;
     }
 
     // Otherwise, prompt to choose which Energy to return
     let prompt = Prompt::ChooseAttachedEnergy {
         player,
-        target_id,
+        pokemon_id: target_id,
         count: 1,
+        min: None,
+        target_id: Some(target_id),
         options: attached_energy,
-        destination: "hand".to_string(),
+        destination: tcg_core::SelectionDestination::Hand,
     };
     game.set_pending_prompt(prompt, player);
 }

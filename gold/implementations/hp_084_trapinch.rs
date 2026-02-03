@@ -20,9 +20,12 @@ pub fn execute_big_bite_effect(game: &mut GameState, attacker_id: CardInstanceId
     };
     
     let opp_idx = 1 - player_idx;
-    
-    // Mark defender as unable to retreat
-    game.add_effect(&big_bite_effect_id(), opp_idx, 1);
+
+    // Mark defender as unable to retreat - get defender's card id
+    if let Some(active) = &game.players[opp_idx].active {
+        let defender_id = active.card.id;
+        game.add_effect(defender_id, &big_bite_effect_id(), 1);
+    }
     true
 }
 
