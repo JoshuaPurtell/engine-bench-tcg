@@ -96,7 +96,7 @@ mod eval_tests {
     // Signature Tests
     // ========================================================================
 
-    #[test] fn eval_execute_psychic_erase_sig() { let _: fn(&mut tcg_core::GameState, tcg_core::PlayerId) = execute_psychic_erase; }
+    #[test] fn eval_execute_psychic_erase_sig() { let _: fn(&mut tcg_core::GameState, tcg_core::CardInstanceId) = execute_psychic_erase; }
 
     // ========================================================================
     // Behavioral Tests
@@ -106,7 +106,7 @@ mod eval_tests {
     fn eval_execute_psychic_erase_executes_without_panic() {
         let (mut game, attacker_id) = create_basic_test_game();
         // Function should execute without panicking
-        execute_psychic_erase(&mut game, PlayerId::P1);
+        execute_psychic_erase(&mut game, attacker_id);
         // Verify game state is still valid after execution
         assert!(game.players[0].active.is_some(), "Game state should remain valid");
     }

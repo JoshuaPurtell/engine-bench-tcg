@@ -16,8 +16,18 @@ pub fn darkness_energy_bonus(game: &GameState, attacker_id: CardInstanceId) -> i
                 let meta = game.card_meta.get(&active.card.def_id);
                 if let Some(meta) = meta {
                     let name = &meta.name;
-                    let types = &meta.types;
-                    if qualifies_for_bonus(name, types) {
+                    let type_strs: Vec<&str> = meta.types.iter().map(|t| match t {
+                        Type::Darkness => "Darkness",
+                        Type::Metal => "Metal",
+                        Type::Fire => "Fire",
+                        Type::Water => "Water",
+                        Type::Grass => "Grass",
+                        Type::Lightning => "Lightning",
+                        Type::Psychic => "Psychic",
+                        Type::Fighting => "Fighting",
+                        Type::Colorless => "Colorless",
+                    }).collect();
+                    if qualifies_for_bonus(name, &type_strs) {
                         // Count Darkness Energy attached
                         let darkness_count = active.attached_energy.iter()
                             .filter(|e| {
@@ -36,8 +46,8 @@ pub fn darkness_energy_bonus(game: &GameState, attacker_id: CardInstanceId) -> i
     0
 }
 
-pub fn qualifies_for_bonus(pokemon_name: &str, pokemon_types: &[Type]) -> bool {
-    pokemon_name.contains("Dark") || pokemon_types.iter().any(|t| *t == Type::Darkness)
+pub fn qualifies_for_bonus(pokemon_name: &str, pokemon_types: &[&str]) -> bool {
+    pokemon_name.contains("Dark") || pokemon_types.iter().any(|t| t.to_lowercase().contains("dark"))
 }
 
 #[cfg(test)]
@@ -46,7 +56,7 @@ mod tests {
     #[test]
     fn test_qualifies() {
         assert!(qualifies_for_bonus("Dark Tyranitar", &[]));
-        assert!(qualifies_for_bonus("Mightyena", &[Type::Darkness]));
-        assert!(!qualifies_for_bonus("Pikachu", &[Type::Lightning]));
+        assert!(qualifies_for_bonus("Mightyena", &["Darkness"]));
+        assert!(!qualifies_for_bonus("Pikachu", &["Lightning"]));
     }
 }
