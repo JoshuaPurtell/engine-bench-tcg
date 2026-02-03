@@ -690,6 +690,9 @@ fn execute_holon_mentor(game: &mut GameState, source_id: CardInstanceId) -> bool
         min: Some(1),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, owner, "DF-75:Holon Mentor:Discard".to_string(), Some(source_id));
     true
@@ -829,6 +832,7 @@ fn execute_mr_stone_project(game: &mut GameState, source_id: CardInstanceId) -> 
             min: Some(0),
             max: Some(2),
             destination: SelectionDestination::Hand,
+        effect_description: String::new(),
         };
         game.set_pending_prompt_custom(
             prompt,
@@ -951,6 +955,7 @@ fn execute_old_rod(game: &mut GameState, source_id: CardInstanceId) -> bool {
             min: Some(1),
             max: Some(1),
             destination: SelectionDestination::Hand,
+        effect_description: String::new(),
         };
         game.set_pending_prompt_custom(prompt, owner, "DF-78:Old Rod:Pokemon".to_string(), Some(source_id));
         return true;
@@ -978,6 +983,7 @@ fn execute_old_rod(game: &mut GameState, source_id: CardInstanceId) -> bool {
             min: Some(1),
             max: Some(1),
             destination: SelectionDestination::Hand,
+        effect_description: String::new(),
         };
         game.set_pending_prompt_custom(prompt, owner, "DF-78:Old Rod:Trainer".to_string(), Some(source_id));
         return true;
@@ -1024,6 +1030,9 @@ fn execute_dark_horn(game: &mut GameState, source_id: CardInstanceId) -> bool {
         min: Some(0),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, player, "DF-6:Dark Horn".to_string(), Some(source_id));
     true
@@ -1673,6 +1682,9 @@ fn execute_rotating_claws(game: &mut GameState, source_id: CardInstanceId) -> bo
         pokemon_id: source_id,
         count: 1,
         min: Some(0),
+    target_id: None,
+    options: Vec::new(),
+    destination: SelectionDestination::default(),
     };
     game.set_pending_prompt_custom(
         prompt,
@@ -1739,6 +1751,7 @@ fn resolve_rotating_claws_discard(
         min: Some(1),
         max: Some(1),
         destination: SelectionDestination::Discard,
+    effect_description: String::new(),
     };
     let effect_id = format!("DF-100:Rotating Claws:Energy:{}", discarded.id.value());
     game.set_pending_prompt_custom(prompt, player, effect_id, Some(source_id));
@@ -1884,6 +1897,9 @@ fn execute_sharing(game: &mut GameState, source_id: CardInstanceId) -> bool {
         min: Some(0),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, owner, "DF-5:Sharing".to_string(), Some(source_id));
     true
@@ -2257,6 +2273,7 @@ fn execute_power_circulation(game: &mut GameState, source_id: CardInstanceId) ->
         min: Some(1),
         max: Some(1),
         destination: SelectionDestination::DeckTop,
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(
         prompt,
@@ -2319,6 +2336,9 @@ fn execute_baby_evolution(game: &mut GameState, source_id: CardInstanceId) -> bo
         min: Some(0),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     let effect_id = format!("{}:Baby Evolution", card_def_id_for_source(game, source_id));
     game.set_pending_prompt_custom(prompt, owner, effect_id, Some(source_id));
@@ -2371,6 +2391,9 @@ fn execute_extra_boost(game: &mut GameState, source_id: CardInstanceId) -> bool 
         min: Some(1),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, owner, "DF-90:Extra Boost".to_string(), Some(source_id));
     true
@@ -2419,6 +2442,9 @@ fn execute_fellow_boost(game: &mut GameState, source_id: CardInstanceId) -> bool
         min: Some(1),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, owner, "DF-95:Fellow Boost".to_string(), Some(source_id));
     true
@@ -2568,6 +2594,7 @@ fn execute_dig_up(game: &mut GameState, source_id: CardInstanceId) -> bool {
         min: Some(0),
         max: Some(2),
         destination: SelectionDestination::Hand,
+    effect_description: String::new(),
     };
     game.set_pending_prompt(prompt, owner);
     true

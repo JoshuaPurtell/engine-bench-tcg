@@ -1374,6 +1374,9 @@ fn execute_attach_energy_from_hand(
         min: Some(1),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(prompt, player, effect_id.to_string(), Some(source_id));
     true
@@ -1615,6 +1618,9 @@ fn execute_ultra_pump(game: &mut GameState, source_id: CardInstanceId) -> bool {
         min: Some(0),
         max: Some(2),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(
         prompt,
@@ -1718,6 +1724,9 @@ fn execute_skill_copy(game: &mut GameState, source_id: CardInstanceId) -> bool {
         min: Some(1),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(
         prompt,
@@ -2258,6 +2267,9 @@ fn execute_constrain(game: &mut GameState, source_id: CardInstanceId) -> bool {
             min: None,
             max: None,
             return_to_deck: false,
+        destination: SelectionDestination::default(),
+        valid_targets: Vec::new(),
+        effect_description: String::new(),
         };
         game.set_pending_prompt_custom(
             prompt,
@@ -2321,6 +2333,9 @@ fn execute_baby_evolution(game: &mut GameState, source_id: CardInstanceId) -> bo
         min: Some(0),
         max: Some(1),
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     let effect_id = format!("{}:Baby Evolution", card_def_id_for_source(game, source_id));
     game.set_pending_prompt_custom(prompt, owner, effect_id, Some(source_id));
@@ -2436,6 +2451,9 @@ fn prompt_constrain_opponent(
         min: None,
         max: None,
         return_to_deck: false,
+    destination: SelectionDestination::default(),
+    valid_targets: Vec::new(),
+    effect_description: String::new(),
     };
     game.set_pending_prompt_custom(
         prompt,
