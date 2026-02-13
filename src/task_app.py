@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""EngineBench Task App - Pokemon TCG card implementation benchmark.
+"""EngineBench Container - Pokemon TCG card implementation benchmark.
 
-This task app:
+This container:
 1. Sets up a sandbox with the overzealous repo (CG visible, DF stubbed)
 2. Runs a coding agent (OpenCode/Claude Code) to implement the card(s)
 3. Evaluates with cargo test (deterministic)
 4. Scores based on compilation and test results
 
 Usage:
-    python -m src.task_app --port 8017
-    uvicorn src.task_app:app --port 8017
+    python -m src.container --port 8017
+    uvicorn src.container:app --port 8017
 """
 
 from __future__ import annotations
@@ -29,6 +29,10 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
+from synth_ai.sdk.task.contracts import (
+    RolloutMetrics,
+    RolloutResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -43,6 +47,30 @@ OVERZEALOUS_REPO = Path(os.getenv(
     "OVERZEALOUS_REPO_PATH",
     str(Path.home() / "Documents" / "GitHub" / "overzealous")
 ))
+
+
+def _extract_trace_correlation_id_from_url(url: str | None) -> str | None:
+    """Best-effort extraction for Synth interceptor correlation IDs.
+
+    Supports path-based formats (…/v1/{trial}/{cid}) and legacy query param (?cid=…).
+    """
+    if not url or not isinstance(url, str):
+        return None
+    try:
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(url)
+        parts = [p for p in (parsed.path or "").split("/") if p]
+        for part in reversed(parts):
+            if part.startswith("trace_") or part.startswith("cid_"):
+                return part
+        qs = parse_qs(parsed.query or "")
+        cid = (qs.get("cid") or [None])[0]
+        if isinstance(cid, str) and (cid.startswith("trace_") or cid.startswith("cid_")):
+            return cid
+    except Exception:
+        return None
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +98,8 @@ class RolloutRecordConfig(BaseModel):
 
 class RolloutRequest(BaseModel):
     """Request model for /rollout endpoint."""
-    run_id: str
+    run_id: str = ""
+    trace_correlation_id: str = ""
     env: RolloutEnvSpec
     policy: RolloutPolicySpec
     ops: list[Any] = Field(default_factory=list)
@@ -78,46 +107,17 @@ class RolloutRequest(BaseModel):
     mode: str = "eval"
 
 
-class RolloutMetrics(BaseModel):
-    """Metrics from a rollout."""
-    episode_rewards: list[float]
-    reward_mean: float | None = None
-    num_steps: int
-    num_episodes: int = 1
-    outcome_reward: float | None = None
-    outcome_score: float | None = None
-    # EngineBench specific
-    compile_pass: bool = False
-    tests_passed: int = 0
-    tests_total: int = 0
-    gold_similarity: float = 0.0
-
-
-class RolloutResponse(BaseModel):
-    """Response model for /rollout endpoint."""
-    run_id: str
-    metrics: RolloutMetrics
-    aborted: bool = False
-    trajectories: list[dict[str, Any]] | None = None
-    trace_correlation_id: str | None = None
-    trace: dict[str, Any] | None = None
-    pipeline_metadata: dict[str, Any] | None = None
-    # EngineBench specific
-    seed: int | None = None
-    instance_id: str | None = None
-    patch: str | None = None
-    compile_error: str | None = None
-    test_output: str | None = None
+# RolloutMetrics and RolloutResponse imported from synth_ai.sdk.container.contracts
 
 
 # ---------------------------------------------------------------------------
-# Task App State
+# Container State
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class EngineBenchState:
-    """State for the EngineBench task app."""
+    """State for the EngineBench container."""
     instance_ids: list[str]
     default_model: str = "gpt-4.1-mini"
     default_timeout: int = 600
@@ -276,10 +276,11 @@ impl Card for {card_id.title().replace("_", "")} {{
 
 
 # ---------------------------------------------------------------------------
-# Container Backend (Docker / Daytona)
+# Agent Backend (Docker / Daytona / Host)
 # ---------------------------------------------------------------------------
 
-CONTAINER_BACKEND = os.getenv("ENGINE_BENCH_BACKEND", "docker").lower()  # "docker" or "daytona"
+# "docker" (default), "daytona" (remote sandbox), or "host" (local opencode install; dev-only)
+CONTAINER_BACKEND = os.getenv("ENGINE_BENCH_BACKEND", "docker").lower()
 
 
 def _build_prompt(instance: dict[str, Any], loop_limit: int) -> str:
@@ -344,16 +345,21 @@ def _docker_bootstrap_script() -> str:
     return r'''#!/bin/bash
 set -e
 
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
+# Fast path: prebuilt images should already contain node + opencode.
+if command -v opencode >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  exit 0
+fi
 
-# Install Node.js and bun for OpenCode
-curl -fsSL https://bun.sh/install | bash
-export PATH="$HOME/.bun/bin:$PATH"
+# Rust toolchain is already present in the base image (rust:*-bookworm).
+command -v cargo >/dev/null
+
+# Install Node.js for OpenCode (opencode-ai ships a node-based CLI).
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y nodejs npm ca-certificates
 
 # Install OpenCode
-bun install -g opencode
+npm install -g opencode-ai
 '''
 
 
@@ -431,8 +437,8 @@ async def run_agent_docker(
             "docker", "run", "-d",
             "--name", container_name,
             "-e", f"OPENAI_API_KEY={api_key}",
-            "--memory", "8g",
-            "--cpus", "4",
+            "--memory", os.getenv("ENGINE_BENCH_DOCKER_MEMORY", "4g"),
+            "--cpus", os.getenv("ENGINE_BENCH_DOCKER_CPUS", "2"),
             image,
             "sleep", "infinity",
         ]
@@ -442,7 +448,13 @@ async def run_agent_docker(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await proc.communicate()
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return {
+                "success": False,
+                "stdout": stdout.decode("utf-8", errors="replace"),
+                "stderr": stderr.decode("utf-8", errors="replace") or "Failed to create Docker container",
+            }
 
         # Copy workspace to container
         copy_proc = await asyncio.create_subprocess_exec(
@@ -451,7 +463,13 @@ async def run_agent_docker(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await copy_proc.communicate(input=tar_data)
+        cp_out, cp_err = await copy_proc.communicate(input=tar_data)
+        if copy_proc.returncode != 0:
+            return {
+                "success": False,
+                "stdout": cp_out.decode("utf-8", errors="replace"),
+                "stderr": cp_err.decode("utf-8", errors="replace") or "Failed to copy workspace into Docker container",
+            }
 
         # Install OpenCode in container
         bootstrap = _docker_bootstrap_script()
@@ -461,7 +479,16 @@ async def run_agent_docker(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await asyncio.wait_for(proc.communicate(), timeout=300)  # 5 min for setup
+        try:
+            bs_out, bs_err = await asyncio.wait_for(proc.communicate(), timeout=300)  # 5 min for setup
+        except asyncio.TimeoutError:
+            return {"success": False, "stdout": "", "stderr": "Docker bootstrap timed out"}
+        if proc.returncode != 0:
+            return {
+                "success": False,
+                "stdout": bs_out.decode("utf-8", errors="replace"),
+                "stderr": bs_err.decode("utf-8", errors="replace") or "Docker bootstrap failed",
+            }
 
         # Run OpenCode
         run_script = _opencode_run_script(prompt, model, api_key, base_url)
@@ -491,7 +518,17 @@ async def run_agent_docker(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await proc.communicate()
+        ex_out, ex_err = await proc.communicate()
+        if proc.returncode != 0:
+            # Still return agent output; extraction failure means we can't compute diff/test.
+            return {
+                "success": False,
+                "stdout": stdout.decode("utf-8", errors="replace"),
+                "stderr": (
+                    "Failed to copy workspace out of Docker container: "
+                    + (ex_err.decode("utf-8", errors="replace") or "")
+                ),
+            }
 
         return {
             "success": success,
@@ -569,6 +606,87 @@ async def run_agent_daytona(
     }
 
 
+async def run_agent_host(
+    prompt: str,
+    sandbox_dir: Path,
+    model: str,
+    timeout: int,
+    api_key: str,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Run OpenCode directly on the host (no container).
+
+    This is intended for local development where Docker bootstrap may be unavailable
+    or too slow. The sandbox_dir is already a temp copy of the repo, so host runs
+    remain isolated from the source checkout.
+    """
+    config_root = Path(tempfile.mkdtemp(prefix="enginebench_opencode_cfg_"))
+    xdg_config_home = config_root / "config"
+    xdg_config_home.mkdir(parents=True, exist_ok=True)
+
+    base = base_url or "https://api.openai.com/v1"
+
+    opencode_dir = xdg_config_home / "opencode"
+    opencode_dir.mkdir(parents=True, exist_ok=True)
+    config_path = opencode_dir / "opencode.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "model": f"openai/{model}",
+                "provider": {
+                    "openai": {
+                        "npm": "@ai-sdk/openai",
+                        "name": "OpenAI",
+                        "models": {model: {}},
+                        "options": {"baseURL": base, "apiKey": api_key},
+                    }
+                },
+                "agent": {
+                    "build": {
+                        "model": f"openai/{model}",
+                        "permission": {"edit": "allow", "bash": "allow"},
+                    }
+                },
+            }
+        )
+    )
+
+    env = dict(os.environ)
+    env["OPENAI_API_KEY"] = api_key
+    env["XDG_CONFIG_HOME"] = str(xdg_config_home)
+    # Ensure config resolution doesn't touch the user's global config.
+    env["HOME"] = str(config_root)
+
+    proc = await asyncio.create_subprocess_exec(
+        "opencode",
+        "run",
+        "--format",
+        "json",
+        "--model",
+        f"openai/{model}",
+        "--title",
+        "engine_bench_eval",
+        prompt,
+        cwd=str(sandbox_dir),
+        env=env,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return {"success": False, "stdout": "", "stderr": "Timed out"}
+
+    return {
+        "success": proc.returncode == 0,
+        "stdout": stdout.decode("utf-8", errors="replace"),
+        "stderr": stderr.decode("utf-8", errors="replace"),
+    }
+
+
 async def run_agent(
     prompt: str,
     sandbox_dir: Path,
@@ -580,6 +698,8 @@ async def run_agent(
     """Run the coding agent in the configured backend."""
     if CONTAINER_BACKEND == "daytona":
         return await run_agent_daytona(prompt, sandbox_dir, model, timeout, api_key, base_url)
+    if CONTAINER_BACKEND == "host":
+        return await run_agent_host(prompt, sandbox_dir, model, timeout, api_key, base_url)
     else:
         return await run_agent_docker(prompt, sandbox_dir, model, timeout, api_key, base_url)
 
@@ -706,19 +826,19 @@ def calculate_score(
 # ---------------------------------------------------------------------------
 
 
-def create_task_app(
+def create_container(
     *,
     required_api_key: str | None = None,
     max_concurrent_rollouts: int | None = None,
 ) -> FastAPI:
-    """Create the EngineBench task app."""
+    """Create the EngineBench container."""
 
     instance_ids = load_instance_ids()
     required_api_key = required_api_key or os.getenv("ENVIRONMENT_API_KEY")
     max_concurrent = max_concurrent_rollouts or int(os.getenv("MAX_CONCURRENT_ROLLOUTS", "1"))
 
     app = FastAPI(
-        title="EngineBench Task App",
+        title="EngineBench Container",
         description="Pokemon TCG card implementation benchmark",
         version="0.1.0",
     )
@@ -747,13 +867,64 @@ def create_task_app(
         }
 
     @app.get("/info")
-    async def info():
+    async def info(x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER)):
+        if required_api_key and x_api_key != required_api_key:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
         # Count instances by expansion
         df_count = len([i for i in state.instance_ids if i.startswith("df-")])
         hp_count = len([i for i in state.instance_ids if i.startswith("hp-")])
         return {
             "name": "EngineBench",
             "description": "Pokemon TCG card implementation benchmark",
+            # Prompt-learning verifier contract: container must expose rubrics via /info.
+            # Backend normalization expects: {"rubrics": {"outcome": <Rubric>, "events": <Rubric>}}
+            # Where <Rubric> can be {"criteria": [...]} or a list of criteria dicts.
+            "rubrics": {
+                "outcome": {
+                    "criteria": [
+                        {
+                            "id": "compiles",
+                            "description": (
+                                "Code compiles successfully for the target expansion crate without errors."
+                            ),
+                            "weight": 0.3,
+                        },
+                        {
+                            "id": "tests_pass",
+                            "description": (
+                                "All task-specific tests pass (the card behavior matches the specification)."
+                            ),
+                            "weight": 0.7,
+                        },
+                    ]
+                },
+                "events": {
+                    "criteria": [
+                        {
+                            "id": "edited_target_file",
+                            "description": (
+                                "The agent edits the specified target file and implements the required TODOs."
+                            ),
+                            "weight": 0.4,
+                        },
+                        {
+                            "id": "uses_checks",
+                            "description": (
+                                "The agent runs compilation and/or tests to validate changes (cargo check/test)."
+                            ),
+                            "weight": 0.4,
+                        },
+                        {
+                            "id": "scoped_changes",
+                            "description": (
+                                "Changes are reasonably scoped to the task (no unrelated refactors)."
+                            ),
+                            "weight": 0.2,
+                        },
+                    ]
+                },
+            },
             "modes": ["single_card", "full_deck"],
             "expansions": {
                 "dragon_frontiers": {"code": "df", "count": df_count},
@@ -772,7 +943,16 @@ def create_task_app(
         if required_api_key and x_api_key != required_api_key:
             raise HTTPException(status_code=401, detail="Unauthorized")
 
-        base_info = {
+        # Prompt-learning expects TaskInfo to include at least:
+        # - environment: string env_name (used for verifier + trace metadata)
+        # - task: dict describing the task (opaque to backend; must exist)
+        base_info: dict[str, Any] = {
+            "environment": "engine_bench",
+            "task": {
+                "id": "engine_bench",
+                "name": "EngineBench",
+            },
+            # Backwards-compatible fields used by older demos.
             "id": "engine_bench",
             "name": "EngineBench",
             "instance_count": len(state.instance_ids),
@@ -781,6 +961,10 @@ def create_task_app(
         if seed is not None:
             instance_id = state.pick_instance_id(seed)
             base_info["example"] = {"seed": seed, "instance_id": instance_id}
+            base_info["task_metadata"] = {
+                "seed": seed,
+                "instance_id": instance_id,
+            }
 
         return base_info
 
@@ -809,10 +993,26 @@ def create_task_app(
         timeout = int(policy_config.get("timeout", state.default_timeout))
         loop_limit = int(policy_config.get("loop_limit", state.default_loop_limit))
         api_key = policy_config.get("api_key") or state.openai_api_key
-        trace_correlation_id = policy_config.get("trace_correlation_id") or secrets.token_hex(6)
+        trace_correlation_id = (
+            request.trace_correlation_id
+            or policy_config.get("trace_correlation_id")
+            or _extract_trace_correlation_id_from_url(policy_config.get("inference_url"))
+            or _extract_trace_correlation_id_from_url(policy_config.get("base_url"))
+            or f"trace_{secrets.token_hex(12)}"
+        )
+        # If prompt-learning provides an interceptor URL, use it as the OpenAI base URL.
+        # This enables upstream trace hydration and consistent correlation IDs.
+        inference_url = policy_config.get("inference_url") or policy_config.get("base_url")
 
         if not api_key:
-            return _error_response(request.run_id, seed, instance_id, "Missing OPENAI_API_KEY")
+            return _error_response(
+                request.run_id,
+                seed,
+                instance_id,
+                "Missing OPENAI_API_KEY",
+                trace_correlation_id=trace_correlation_id,
+                inference_url=inference_url if isinstance(inference_url, str) else None,
+            )
 
         start_time = time.time()
 
@@ -830,6 +1030,12 @@ def create_task_app(
                     # 3. Build prompt and run agent in container
                     prompt = _build_prompt(instance, loop_limit)
                     base_url = policy_config.get("base_url") or policy_config.get("inference_url")
+                    # Echo back the effective inference URL used by the agent for trace hydration.
+                    effective_inference_url = (
+                        base_url
+                        if isinstance(base_url, str) and base_url.strip()
+                        else "https://api.openai.com/v1"
+                    )
 
                     agent_result = await run_agent(
                         prompt,
@@ -861,48 +1067,135 @@ def create_task_app(
 
                     duration = time.time() - start_time
 
-                    return RolloutResponse(
-                        run_id=request.run_id,
-                        metrics=RolloutMetrics(
-                            episode_rewards=[score],
-                            reward_mean=score,
-                            num_steps=1,
-                            outcome_reward=score,
-                            compile_pass=compile_pass,
-                            tests_passed=tests_passed,
-                            tests_total=tests_total,
-                            gold_similarity=gold_similarity,
-                        ),
-                        trajectories=[{
-                            "final": {
-                                "info": {
-                                    "success": compile_pass and tests_passed > 0,
+                    # Minimal v3 trace payload required by the verifier pipeline.
+                    # This is not a full LLM trace; the backend can hydrate full traces via correlation IDs
+                    # when an interceptor inference_url is used.
+                    agent_stdout = (agent_result.get("stdout", "") or "")[:5000]
+                    agent_stderr = (agent_result.get("stderr", "") or "")[:5000]
+                    # Provide minimal IO examples for GEPA proposers/extractors.
+                    # EngineBench rollouts are agentic (no llm_request/llm_response events), so we
+                    # populate markov_blanket_message_history with observation/action messages.
+                    observation_text = (prompt or "")[:10000]
+                    patch_excerpt = (patch or "")[:8000]
+                    action_text = (
+                        f"compile_pass={compile_pass}\n"
+                        f"tests={tests_passed}/{tests_total}\n"
+                        f"gold_similarity={gold_similarity:.3f}\n"
+                        f"score={score:.3f}\n"
+                        f"\n"
+                        f"patch:\n{patch_excerpt}\n"
+                    )[:12000]
+                    trace_payload = {
+                        "schema_version": "3.0",
+                        "event_history": [
+                            {
+                                "type": "task",
+                                "observation": f"EngineBench rollout seed={seed} instance_id={instance_id}",
+                                "metadata": {
+                                    "environment": "engine_bench",
+                                    "instance_id": instance_id,
+                                    "seed": seed,
+                                    "trace_correlation_id": trace_correlation_id,
+                                    "inference_url": effective_inference_url,
+                                },
+                            },
+                            {
+                                "type": "agent_run",
+                                "observation": (
+                                    "OpenCode agent executed inside a sandboxed repo; "
+                                    "stdout/stderr are attached for debugging."
+                                ),
+                                "metadata": {
+                                    "agent": "opencode",
+                                    "backend": CONTAINER_BACKEND,
+                                    "model": model,
+                                    "timeout_s": timeout,
+                                    "loop_limit": loop_limit,
+                                    "success": bool(agent_result.get("success")),
+                                },
+                                "stdout": agent_stdout,
+                                "stderr": agent_stderr,
+                            },
+                            {
+                                "type": "evaluation",
+                                "observation": (
+                                    f"compile_pass={compile_pass} "
+                                    f"tests={tests_passed}/{tests_total} "
+                                    f"gold_similarity={gold_similarity:.3f} "
+                                    f"score={score:.3f}"
+                                ),
+                                "metadata": {
+                                    "compile_pass": compile_pass,
+                                    "tests_passed": tests_passed,
+                                    "tests_total": tests_total,
+                                    "gold_similarity": gold_similarity,
                                     "score": score,
                                     "duration_seconds": duration,
-                                }
+                                },
                             },
-                            "seed": seed,
-                        }],
-                        seed=seed,
-                        instance_id=instance_id,
-                        patch=patch[:10000] if patch else None,  # Truncate
-                        compile_error=compile_error[:2000] if compile_error else None,
-                        test_output=test_output[:2000] if test_output else None,
-                        trace_correlation_id=trace_correlation_id,
-                        trace={
-                            "schema_version": "3.0",
-                            "metadata": {
-                                "instance_id": instance_id,
-                                "trace_correlation_id": trace_correlation_id,
-                                "duration_seconds": duration,
-                                "agent_stdout": agent_result.get("stdout", "")[:5000],
+                        ],
+                        "markov_blanket_message_history": [
+                            {
+                                "message_type": "observation",
+                                "content": {"text": observation_text},
+                                "metadata": {
+                                    "from_system_role": "environment",
+                                    "to_system_role": "agent",
+                                    "environment": "engine_bench",
+                                    "seed": seed,
+                                    "instance_id": instance_id,
+                                },
                             },
+                            {
+                                "message_type": "action",
+                                "content": {"text": action_text},
+                                "metadata": {
+                                    "from_system_role": "agent",
+                                    "to_system_role": "environment",
+                                    "environment": "engine_bench",
+                                    "seed": seed,
+                                    "instance_id": instance_id,
+                                },
+                            },
+                        ],
+                        "metadata": {
+                            "instance_id": instance_id,
+                            "trace_correlation_id": trace_correlation_id,
+                            "inference_url": effective_inference_url,
+                            "duration_seconds": duration,
                         },
-                        pipeline_metadata={"trace_correlation_id": trace_correlation_id},
+                    }
+
+                    return RolloutResponse(
+                        trace_correlation_id=trace_correlation_id,
+                        reward_info=RolloutMetrics(
+                            outcome_reward=score,
+                            event_rewards=[score],
+                            details={
+                                "compile_pass": compile_pass,
+                                "tests_passed": tests_passed,
+                                "tests_total": tests_total,
+                                "gold_similarity": gold_similarity,
+                                "seed": seed,
+                                "instance_id": instance_id,
+                                "patch": (patch or "")[:10000] or None,
+                                "compile_error": (compile_error or "")[:2000] or None,
+                                "test_output": (test_output or "")[:2000] or None,
+                            },
+                        ),
+                        inference_url=effective_inference_url,
+                        trace=trace_payload,
                     )
 
                 except Exception as exc:
-                    return _error_response(request.run_id, seed, instance_id, str(exc))
+                    return _error_response(
+                        request.run_id,
+                        seed,
+                        instance_id,
+                        str(exc),
+                        trace_correlation_id=trace_correlation_id,
+                        inference_url=inference_url if isinstance(inference_url, str) else None,
+                    )
 
     return app
 
@@ -912,39 +1205,81 @@ def _error_response(
     seed: int,
     instance_id: str | None,
     error: str,
+    *,
+    trace_correlation_id: str | None = None,
+    inference_url: str | None = None,
 ) -> RolloutResponse:
     """Create an error response."""
-    return RolloutResponse(
-        run_id=run_id,
-        metrics=RolloutMetrics(
-            episode_rewards=[0.0],
-            reward_mean=0.0,
-            num_steps=0,
-            outcome_reward=0.0,
-        ),
-        aborted=True,
-        seed=seed,
-        instance_id=instance_id,
-        trajectories=[{
-            "final": {"info": {"success": False, "error": error}},
+    tcid = trace_correlation_id or secrets.token_hex(6)
+    trace_payload = {
+        "schema_version": "3.0",
+        "event_history": [
+            {
+                "type": "error",
+                "observation": f"EngineBench rollout failed: {error}",
+                "metadata": {
+                    "error": error,
+                    "seed": seed,
+                    "instance_id": instance_id,
+                    "trace_correlation_id": tcid,
+                    "inference_url": inference_url,
+                },
+            }
+        ],
+        "markov_blanket_message_history": [
+            {
+                "message_type": "observation",
+                "content": {"text": f"EngineBench rollout error seed={seed} instance_id={instance_id}"},
+                "metadata": {
+                    "from_system_role": "environment",
+                    "to_system_role": "agent",
+                    "environment": "engine_bench",
+                    "seed": seed,
+                    "instance_id": instance_id,
+                },
+            },
+            {
+                "message_type": "action",
+                "content": {"text": (error or "")[:4000]},
+                "metadata": {
+                    "from_system_role": "agent",
+                    "to_system_role": "environment",
+                    "environment": "engine_bench",
+                    "seed": seed,
+                    "instance_id": instance_id,
+                },
+            },
+        ],
+        "metadata": {
+            "error": error,
             "seed": seed,
-        }],
-        trace={
-            "schema_version": "3.0",
-            "metadata": {"error": error, "seed": seed, "instance_id": instance_id},
+            "instance_id": instance_id,
+            "trace_correlation_id": tcid,
+            "inference_url": inference_url,
         },
+    }
+
+    return RolloutResponse(
+        trace_correlation_id=tcid,
+        reward_info=RolloutMetrics(
+            outcome_reward=0.0,
+            details={"error": error, "seed": seed, "instance_id": instance_id},
+        ),
+        status_detail=error,
+        inference_url=inference_url,
+        trace=trace_payload,
     )
 
 
 # Create the app
-app = create_task_app()
+app = create_container()
 
 
 if __name__ == "__main__":
     import argparse
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="EngineBench Task App")
+    parser = argparse.ArgumentParser(description="EngineBench Container")
     parser.add_argument("--port", type=int, default=8017, help="Port to run on")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind")
     args = parser.parse_args()

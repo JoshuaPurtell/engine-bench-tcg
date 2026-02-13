@@ -895,6 +895,7 @@ dependencies = [
     { name = "openai" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "synth-ai" },
     { name = "uvicorn" },
 ]
 
@@ -922,6 +923,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
+    { name = "synth-ai" },
     { name = "synth-ai", marker = "extra == 'synth'" },
     { name = "uvicorn", specifier = ">=0.27.0" },
 ]

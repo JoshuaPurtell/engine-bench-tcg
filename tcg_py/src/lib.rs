@@ -89,6 +89,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             trainer_effect: None,
             evolves_from: None,
             attacks: vec![],
+            card_type: "Energy".to_string(),
+            delta_species: false,
         });
     }
 
@@ -127,6 +129,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             trainer_effect: None,
             evolves_from: None,
             attacks: vec![],
+            card_type: "Energy".to_string(),
+            delta_species: false,
         });
     }
 
@@ -158,6 +162,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
                 create_attack("Hypnosis", 0, Type::Psychic, 1, vec![Type::Psychic]),
                 create_attack("Psychic Boom", 10, Type::Psychic, 2, vec![Type::Psychic, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-033 Kirlia δ - Stage 1 Psychic - HP 70
@@ -186,6 +192,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
                 create_attack("Smack", 20, Type::Colorless, 1, vec![Type::Colorless]),
                 create_attack("Flickering Flames", 40, Type::Psychic, 2, vec![Type::Psychic, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-093 Gardevoir ex δ - Stage 2 Fire - HP 150
@@ -213,6 +221,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Flame Ball", 80, Type::Fire, 3, vec![Type::Fire, Type::Colorless, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-017 Jynx δ - Basic Psychic - HP 60
@@ -240,6 +250,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Psybeam", 20, Type::Psychic, 2, vec![Type::Psychic, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-070 Vulpix δ - Basic Fire - HP 50
@@ -267,6 +279,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Will-o'-the-wisp", 20, Type::Fire, 1, vec![Type::Fire]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-008 Ninetales δ - Stage 1 Fire - HP 80
@@ -294,6 +308,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Fire Blast", 60, Type::Fire, 3, vec![Type::Fire, Type::Fire, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-010 Snorlax δ - Basic Colorless - HP 90
@@ -321,6 +337,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Claw Swipe", 30, Type::Colorless, 2, vec![Type::Colorless, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-068 Trapinch δ - Basic Psychic - HP 50
@@ -348,6 +366,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Bite", 10, Type::Colorless, 1, vec![Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-024 Vibrava δ - Stage 1 Psychic - HP 70
@@ -376,6 +396,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
                 create_attack("Quick Attack", 20, Type::Colorless, 1, vec![Type::Colorless]),
                 create_attack("Dragon Beat", 40, Type::Psychic, 2, vec![Type::Psychic, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-092 Flygon ex δ - Stage 2 Psychic - HP 150
@@ -403,6 +425,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Psychic Pulse", 80, Type::Psychic, 3, vec![Type::Psychic, Type::Psychic, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-009 Pinsir δ - Basic Grass - HP 70
@@ -430,6 +454,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Grip and Squeeze", 50, Type::Grass, 3, vec![Type::Grass, Type::Grass, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-003 Heracross δ - Basic Grass - HP 80
@@ -457,6 +483,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             attacks: vec![
                 create_attack("Megahorn", 60, Type::Grass, 3, vec![Type::Grass, Type::Grass, Type::Colorless]),
             ],
+            card_type: "Pokemon".to_string(),
+            delta_species: true,
         }),
 
         // DF-082 TV Reporter - Trainer/Supporter
@@ -482,6 +510,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             trainer_effect: None,
             evolves_from: None,
             attacks: vec![],
+            card_type: "Trainer".to_string(),
+            delta_species: false,
         }),
 
         // DF-079 Prof. Elm's Training Method - Trainer
@@ -507,6 +537,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             trainer_effect: None,
             evolves_from: None,
             attacks: vec![],
+            card_type: "Trainer".to_string(),
+            delta_species: false,
         }),
 
         // DF-072 Buffer Piece - Pokemon Tool
@@ -532,6 +564,8 @@ fn get_card_meta(def_id: &str) -> Option<CardMeta> {
             trainer_effect: None,
             evolves_from: None,
             attacks: vec![],
+            card_type: "Trainer".to_string(),
+            delta_species: false,
         }),
 
         _ => None,
@@ -597,6 +631,8 @@ fn build_card_meta_map(deck1: &[String], deck2: &[String]) -> CardMetaMap {
                     attacks: vec![
                         create_attack("Tackle", 20, Type::Colorless, 1, vec![Type::Colorless]),
                     ],
+                    card_type: "Pokemon".to_string(),
+                    delta_species: false,
                 });
             }
         }
@@ -866,6 +902,7 @@ fn prompt_action_type(prompt: &Prompt) -> String {
         Prompt::ReorderDeckTop { .. } => "ReorderDeckTop".to_string(),
         Prompt::ChooseSpecialCondition { .. } => "ChooseSpecialCondition".to_string(),
         Prompt::ChoosePrizeCards { .. } => "ChoosePrizeCards".to_string(),
+        _ => "UnknownPrompt".to_string(),
     }
 }
 
@@ -888,7 +925,7 @@ fn pending_prompt_snapshot(prompt: Option<&Prompt>) -> PendingPromptSnapshot {
                     "max": max,
                 }),
             ),
-            Prompt::ChooseAttack { attacks } => (
+            Prompt::ChooseAttack { attacks, .. } => (
                 Vec::new(),
                 json!({ "attack_names": attacks.iter().map(|a| a.name.clone()).collect::<Vec<_>>() }),
             ),
@@ -967,6 +1004,7 @@ fn pending_prompt_snapshot(prompt: Option<&Prompt>) -> PendingPromptSnapshot {
                     "max": max,
                 }),
             ),
+            _ => (Vec::new(), json!({})),
         };
 
         PendingPromptSnapshot {

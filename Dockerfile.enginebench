@@ -1,0 +1,14 @@
+FROM rust:1.75-bookworm
+
+# Preinstall dependencies needed by EngineBench agent runs.
+# - nodejs/npm: required for opencode-ai CLI
+# - git: used for diffs in the sandbox
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends nodejs npm git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# OpenCode CLI (node-based)
+RUN npm install -g opencode-ai
+
+WORKDIR /workspace
+
