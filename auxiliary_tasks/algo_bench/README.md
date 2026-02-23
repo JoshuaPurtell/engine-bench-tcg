@@ -11,10 +11,10 @@ To benchmark an existing AI (v1–v3 from `reference_algos`, plus v4 from `tcg_a
 ```bash
 python3 benchmark_existing_ai.py \
   --ai-name RandomAiV4 \
-  --matches 50 \
-  --server-db /path/to/overzealous/data/server.sqlite \
-  --cards-db /path/to/overzealous/data/cards.sqlite
+  --matches 50
 ```
+
+Deck data is bundled in `data/` (server.sqlite + cards.sqlite). If you omit `--server-db` and `--cards-db`, the scripts use `data/server.sqlite` and `data/cards.sqlite` when present.
 
 ### Benchmark Custom AI Code
 
@@ -24,9 +24,7 @@ To benchmark a new AI implementation from Rust code:
 python3 benchmark_ai.py \
   --ai-code-file path/to/your_ai.rs \
   --name YourAI \
-  --matches 50 \
-  --server-db /path/to/overzealous/data/server.sqlite \
-  --cards-db /path/to/overzealous/data/cards.sqlite
+  --matches 50
 ```
 
 **Verified example output** (with a simple heuristic AI):

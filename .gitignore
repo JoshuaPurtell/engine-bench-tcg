@@ -57,6 +57,8 @@ sandbox_repo/
 # Large files
 *.sqlite
 *.db
+# Exception: algo_bench bundled deck data
+!auxiliary_tasks/algo_bench/data/*.sqlite
 
 # Temporary
 .tmp/

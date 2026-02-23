@@ -1,0 +1,16 @@
+{
+  "name": "Overzealous-v0",
+  "cards": [
+    {"card_def_id": "CG-6", "count": 4},
+    {"card_def_id": "CG-55", "count": 4},
+    {"card_def_id": "CG-37", "count": 4},
+    {"card_def_id": "DF-93", "count": 4},
+    {"card_def_id": "DF-33", "count": 4},
+    {"card_def_id": "DF-61", "count": 4},
+    {"card_def_id": "DF-3", "count": 4},
+    {"card_def_id": "CG-73", "count": 4},
+    {"card_def_id": "DF-79", "count": 4},
+    {"card_def_id": "DF-75", "count": 4},
+    {"card_def_id": "ENERGY-FIRE", "count": 20}
+  ]
+}

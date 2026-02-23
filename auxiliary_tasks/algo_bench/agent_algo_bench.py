@@ -21,6 +21,7 @@ from typing import Any, Optional
 BASE_DIR = Path(__file__).parent
 ROOT_DIR = BASE_DIR.parent.parent
 OVERZEALOUS_DIR = Path("/Users/joshpurtell/Documents/GitHub/overzealous")
+ALGO_BENCH_DATA_DIR = BASE_DIR / "data"
 BENCHMARK_SCRIPT = BASE_DIR / "benchmark_ai.py"
 SUBMISSION_FILE = "algo_submission.txt"
 
@@ -692,8 +693,10 @@ def main() -> None:
         default=1,
         help="Number of instances to run in parallel",
     )
-    parser.add_argument("--server-db", type=str, default=str(OVERZEALOUS_DIR / "data/server.sqlite"))
-    parser.add_argument("--cards-db", type=str, default=str(OVERZEALOUS_DIR / "data/cards.sqlite"))
+    default_server = str(ALGO_BENCH_DATA_DIR / "server.sqlite") if (ALGO_BENCH_DATA_DIR / "server.sqlite").exists() else str(OVERZEALOUS_DIR / "data/server.sqlite")
+    default_cards = str(ALGO_BENCH_DATA_DIR / "cards.sqlite") if (ALGO_BENCH_DATA_DIR / "cards.sqlite").exists() else str(OVERZEALOUS_DIR / "data/cards.sqlite")
+    parser.add_argument("--server-db", type=str, default=default_server)
+    parser.add_argument("--cards-db", type=str, default=default_cards)
     parser.add_argument("--env-file", type=Path, help="Path to .env file for API keys")
     parser.add_argument(
         "--output",

@@ -1,0 +1,22 @@
+{
+  "name": "Green Cyclone",
+  "source": "Theme deck from Bulbapedia",
+  "cards": [
+    {"card_def_id": "CG-28", "count": 1},
+    {"card_def_id": "CG-23", "count": 2},
+    {"card_def_id": "CG-32", "count": 2},
+    {"card_def_id": "CG-33", "count": 1},
+    {"card_def_id": "CG-34", "count": 2},
+    {"card_def_id": "CG-45", "count": 4},
+    {"card_def_id": "CG-53", "count": 2},
+    {"card_def_id": "CG-60", "count": 4},
+    {"card_def_id": "CG-67", "count": 4},
+    {"card_def_id": "CG-69", "count": 4},
+    {"card_def_id": "LM-73", "count": 2},
+    {"card_def_id": "CG-73", "count": 2},
+    {"card_def_id": "CG-78", "count": 2},
+    {"card_def_id": "CG-86", "count": 2},
+    {"card_def_id": "CG-87", "count": 2},
+    {"card_def_id": "ENERGY-GRASS", "count": 24}
+  ]
+}

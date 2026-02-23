@@ -16,6 +16,7 @@ import sys
 
 OVERZEALOUS_DIR = Path("/Users/joshpurtell/Documents/GitHub/overzealous")
 REFERENCE_ALGOS_DIR = Path(__file__).parent / "reference_algos"
+ALGO_BENCH_DATA_DIR = Path(__file__).parent / "data"
 
 
 def reference_label(struct_name: str) -> str:
@@ -414,8 +415,10 @@ def main():
     parser = argparse.ArgumentParser(description="Benchmark an existing AI against v1-v4")
     parser.add_argument("--ai-name", type=str, default="RandomAiV4", help="Name of the AI (RandomAiV4, etc.)")
     parser.add_argument("--matches", type=int, default=50, help="Number of matches per opponent")
-    parser.add_argument("--server-db", type=str, default="data/server.sqlite", help="Path to server DB")
-    parser.add_argument("--cards-db", type=str, default="data/cards.sqlite", help="Path to cards DB")
+    default_server = str(ALGO_BENCH_DATA_DIR / "server.sqlite") if (ALGO_BENCH_DATA_DIR / "server.sqlite").exists() else "data/server.sqlite"
+    default_cards = str(ALGO_BENCH_DATA_DIR / "cards.sqlite") if (ALGO_BENCH_DATA_DIR / "cards.sqlite").exists() else "data/cards.sqlite"
+    parser.add_argument("--server-db", type=str, default=default_server, help="Path to server DB")
+    parser.add_argument("--cards-db", type=str, default=default_cards, help="Path to cards DB")
 
     args = parser.parse_args()
 
