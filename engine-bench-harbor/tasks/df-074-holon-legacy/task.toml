@@ -4,8 +4,8 @@ version = "1.0"
 benchmark = "engine-bench"
 set = "DF"
 card_id = "df-074"
-card_name = "Holon Legacy"
-instance_id = "df-074-holon-legacy"
+card_name = "Holon Canonical"
+instance_id = "df-074-holon-canonical"
 difficulty = "medium"
 tags = ["tcg", "rust", "engine", "dragon_frontiers"]
 

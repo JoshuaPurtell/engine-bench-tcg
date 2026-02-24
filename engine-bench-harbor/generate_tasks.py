@@ -278,7 +278,7 @@ def create_task_folder(instance_id: str, force: bool = False):
         expansion = parts[0]
         card_file_name = parts[-1]
     else:
-        # Fallback parsing
+        # Strict parsing
         expansion = instance_id.split("-")[0]
         card_file_name = f"{instance_id.replace('-', '_')}.rs"
     

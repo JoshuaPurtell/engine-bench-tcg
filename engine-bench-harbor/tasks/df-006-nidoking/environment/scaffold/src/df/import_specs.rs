@@ -238,7 +238,7 @@ pub const DF_TRAINERS: &[TrainerSpec] = &[
     },
     TrainerSpec {
         number: "74",
-        card_name: "Holon Legacy",
+        card_name: "Holon Canonical",
         trainer_kind: "Stadium",
         notes: "Delta Pokemon have no Weakness and cannot use Poké-Powers.",
     },

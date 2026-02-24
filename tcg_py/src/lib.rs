@@ -606,7 +606,7 @@ fn build_card_meta_map(deck1: &[String], deck2: &[String]) -> CardMetaMap {
             if let Some(meta) = get_card_meta(def_id) {
                 meta_map.insert(card_def_id, meta);
             } else {
-                // Create a generic fallback for unknown cards
+                // Create a generic strict for unknown cards
                 meta_map.insert(card_def_id, CardMeta {
                     name: def_id.clone(),
                     is_basic: true,
@@ -1377,7 +1377,7 @@ impl PtcgGame {
                 Ok(true)
             }
             Err(e) => {
-                // If prompt mismatch, try a ChooseNewActive fallback.
+                // If prompt mismatch, try a ChooseNewActive strict.
                 if let Some(pending) = &self.game.pending_prompt {
                     if let Prompt::ChooseNewActive { options, .. } = &pending.prompt {
                         if let Some(card_id) = extract_card_id(action_json) {
@@ -1598,7 +1598,7 @@ fn run_game_vs_ai(
         match game.submit_action(&action_json) {
             Ok(_) => {}
             Err(e) => {
-                // On error, try EndTurn as fallback
+                // On error, try EndTurn as strict
                 let _ = game.submit_action(r#"{"action": "EndTurn"}"#);
             }
         }

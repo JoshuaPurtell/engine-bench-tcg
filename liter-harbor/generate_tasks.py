@@ -236,7 +236,7 @@ rm -rf /app/tests
 #   @@check_flags@@     — cargo check flags ("--features modular" or "")
 #   @@test_flags@@      — cargo test flags ("--features modular --lib mod::tests" etc.)
 #   @@module@@          — module name
-#   @@expected_tests@@  — fallback test count
+#   @@expected_tests@@  — strict test count
 TEST_SH = r"""#!/usr/bin/env bash
 set -u
 
@@ -399,7 +399,7 @@ class EngineConfig:
     tags: list[str]                     # task.toml tags
     deps_description: str              # Available deps for instruction.md
     engine_description: str            # One-line engine description
-    gold_source: str = "modular"        # "modular" (copy mod.rs) or "legacy" (copy src/*.rs + append test include)
+    gold_source: str = "modular"        # "modular" (copy mod.rs) or "canonical" (copy src/*.rs + append test include)
     spec_path_template: str = ""        # Path to spec.md (with {module} placeholder)
     tests_path_template: str = ""       # Path to tests/modular.rs (with {module} placeholder)
     lib_rs_path: str = ""               # Path to lib.rs for export extraction
@@ -422,7 +422,7 @@ NETTER_CONFIG = EngineConfig(
     tags=["rust", "game-engine", "netter", "roguelike"],
     deps_description="`serde` (with derive), `serde_json`, `toml`",
     engine_description="a NetHack-like dungeon crawler",
-    gold_source="legacy",
+    gold_source="canonical",
     spec_path_template="src_modular/modules/{module}/spec.md",
     tests_path_template="src_modular/modules/{module}/tests/modular.rs",
     lib_rs_path="src_modular/lib.rs",
@@ -1026,7 +1026,7 @@ Edit the file `{mod_file_rel}`. You MUST:
     if expected_tests == 0 and tests_path.exists():
         expected_tests = tests_path.read_text().count("#[test]")
     if expected_tests == 0:
-        expected_tests = 10  # fallback
+        expected_tests = 10  # strict
 
     # --- task.toml ---
     task_toml = f"""version = "1.0"
@@ -1075,7 +1075,7 @@ storage_mb = 10240
     solve_sh_path.chmod(0o755)
 
     # --- Gold implementation ---
-    if engine.gold_source == "legacy":
+    if engine.gold_source == "canonical":
         # Netter: gold is src/<module>.rs + appended test module include
         gold_src = engine.source_root / "src" / f"{module_name}.rs"
         if gold_src.exists():

@@ -96,9 +96,9 @@ Given working but slow code, optimize to meet performance benchmarks.
 **Optimization Solvers**
 Solve complex word problems using solvers like Gurobi, CPLEX, or OR-Tools.
 
-### Legacy & Migration
+### Canonical & Migration
 
-**Running Legacy Code**
+**Running Canonical Code**
 Modernize ancient research projects to function in contemporary environments.
 
 **Dependency Hell Resolution**

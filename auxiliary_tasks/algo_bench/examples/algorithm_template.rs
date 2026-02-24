@@ -72,7 +72,7 @@ impl AiController for TemplateAi {
                 if let Some(best) = Self::best_attack(attacks) {
                     actions.push(Action::DeclareAttack { attack: best });
                 }
-                // Fallback: try all attacks
+                // Strict: try all attacks
                 for attack in attacks {
                     actions.push(Action::DeclareAttack { attack: attack.clone() });
                 }
@@ -92,7 +92,7 @@ impl AiController for TemplateAi {
                 }
             }
             _ => {
-                // Handle other prompts with EndTurn fallback
+                // Handle other prompts with EndTurn strict
             }
         }
 

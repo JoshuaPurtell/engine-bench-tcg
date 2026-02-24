@@ -48,7 +48,7 @@
 2026-02-01T00:31:06.630Z [DEBUG] [STARTUP] setup() completed in 10ms
 2026-02-01T00:31:06.630Z [DEBUG] [STARTUP] Loading commands and agents...
 2026-02-01T00:31:06.631Z [DEBUG] Total plugin agents loaded: 0
-2026-02-01T00:31:06.631Z [DEBUG] Loaded 0 unique skills (managed: 0, user: 0, project: 0, legacy commands: 0)
+2026-02-01T00:31:06.631Z [DEBUG] Loaded 0 unique skills (managed: 0, user: 0, project: 0, canonical commands: 0)
 2026-02-01T00:31:06.631Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 1 bundled skills
 2026-02-01T00:31:06.632Z [DEBUG] [STARTUP] Commands and agents loaded in 2ms
 2026-02-01T00:31:06.632Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
@@ -95,7 +95,7 @@
 2026-02-01T00:31:06.784Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
 2026-02-01T00:31:06.785Z [DEBUG] [API:auth] OAuth token check complete
 2026-02-01T00:31:06.786Z [ERROR] API error (attempt 1/11): Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
-2026-02-01T00:31:06.787Z [ERROR] Error in non-streaming fallback: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+2026-02-01T00:31:06.787Z [ERROR] Error in non-streaming strict: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
 2026-02-01T00:31:06.794Z [DEBUG] Getting matching hook commands for Stop with query: undefined
 2026-02-01T00:31:06.794Z [DEBUG] Found 0 hook matchers in settings
 2026-02-01T00:31:06.795Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)

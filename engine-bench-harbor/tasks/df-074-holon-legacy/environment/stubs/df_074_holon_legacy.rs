@@ -1,8 +1,8 @@
-//! Holon Legacy - Dragon Frontiers #74
+//! Holon Canonical - Dragon Frontiers #74
 
 pub const SET: &str = "DF";
 pub const NUMBER: u32 = 74;
-pub const NAME: &str = "Holon Legacy";
+pub const NAME: &str = "Holon Canonical";
 
 #[cfg(test)]
 mod tests {
@@ -11,6 +11,6 @@ mod tests {
     fn test_card_identifiers() {
         assert_eq!(SET, "DF");
         assert_eq!(NUMBER, 74);
-        assert_eq!(NAME, "Holon Legacy");
+        assert_eq!(NAME, "Holon Canonical");
     }
 }

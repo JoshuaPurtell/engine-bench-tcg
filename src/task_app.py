@@ -15,8 +15,10 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -27,11 +29,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Body, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from synth_ai.sdk.task.contracts import (
+    CandidateValidationIssue,
     RolloutMetrics,
     RolloutResponse,
+    ValidateCandidateRequest,
+    ValidateCandidateResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -41,6 +46,22 @@ from synth_ai.sdk.task.contracts import (
 BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 GOLD_DIR = BASE_DIR / "gold"
+ALGO_BENCH_DIR = BASE_DIR / "auxiliary_tasks" / "algo_bench"
+ALGO_BENCH_BENCHMARK = ALGO_BENCH_DIR / "benchmark_ai.py"
+ALGO_BENCH_REFERENCE_ALGOS_DIR = ALGO_BENCH_DIR / "reference_algos"
+ALGO_BENCH_DATA_DIR = ALGO_BENCH_DIR / "data"
+ALGO_BENCH_SERVER_DB = ALGO_BENCH_DATA_DIR / "server.sqlite"
+ALGO_BENCH_CARDS_DB = ALGO_BENCH_DATA_DIR / "cards.sqlite"
+ALGO_BENCH_BUILD_CACHE_DIR = Path(
+    os.getenv("ALGO_BENCH_BUILD_CACHE_DIR", str(BASE_DIR / ".algo_bench_build_cache"))
+)
+ALGO_BENCH_SHARED_TARGET_DIR = Path(
+    os.getenv(
+        "ALGO_BENCH_SHARED_TARGET_DIR",
+        str(ALGO_BENCH_BUILD_CACHE_DIR / "_cargo_target"),
+    )
+)
+_ALGO_BENCH_SOURCE_FINGERPRINT: str | None = None
 
 # Path to the overzealous repo (source for sandboxes)
 OVERZEALOUS_REPO = Path(os.getenv(
@@ -52,7 +73,7 @@ OVERZEALOUS_REPO = Path(os.getenv(
 def _extract_trace_correlation_id_from_url(url: str | None) -> str | None:
     """Best-effort extraction for Synth interceptor correlation IDs.
 
-    Supports path-based formats (…/v1/{trial}/{cid}) and legacy query param (?cid=…).
+    Supports path-based formats (…/v1/{trial}/{cid}) and canonical query param (?cid=…).
     """
     if not url or not isinstance(url, str):
         return None
@@ -71,6 +92,460 @@ def _extract_trace_correlation_id_from_url(url: str | None) -> str | None:
     except Exception:
         return None
     return None
+
+
+def _normalize_mode_token(raw: Any) -> str:
+    if not isinstance(raw, str):
+        return ""
+    return raw.strip().lower().replace("-", "_")
+
+
+def _policy_value(policy_config: dict[str, Any], key: str) -> Any:
+    """Resolve policy value from either top-level policy config or nested config block."""
+    if key in policy_config and policy_config.get(key) is not None:
+        return policy_config.get(key)
+    nested = policy_config.get("config")
+    if isinstance(nested, dict):
+        return nested.get(key)
+    return None
+
+
+def _looks_like_rust_candidate_code(raw: str) -> bool:
+    text = raw.strip()
+    if len(text) < 24:
+        return False
+    has_markers = any(
+        marker in text
+        for marker in (
+            "impl ",
+            "fn ",
+            "pub struct ",
+            "use ",
+            "AiController",
+            "Prompt::",
+            "Action::",
+        )
+    )
+    return has_markers and ("\n" in text or ";" in text)
+
+
+def _extract_candidate_code(policy_config: dict[str, Any]) -> str | None:
+    """Extract optimize-anything candidate code from known wrapper layouts."""
+    candidates: list[dict[str, Any]] = []
+
+    def _collect(value: Any) -> None:
+        if isinstance(value, dict):
+            candidates.append(value)
+
+    _collect(policy_config)
+    _collect(policy_config.get("config"))
+    for root in list(candidates):
+        for key in ("artifact_payload", "candidate_artifact", "candidate"):
+            _collect(root.get(key))
+
+    for payload in candidates:
+        code = payload.get("candidate_code")
+        if isinstance(code, str) and code.strip():
+            return code
+
+    # Strict: sometimes candidate is wrapped as JSON text in instruction/candidate_content.
+    for payload in candidates:
+        for text_key in ("candidate_content", "instruction"):
+            raw = payload.get(text_key)
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                if _looks_like_rust_candidate_code(raw):
+                    return raw
+                continue
+            if isinstance(parsed, dict):
+                code = parsed.get("candidate_code")
+                if isinstance(code, str) and code.strip():
+                    return code
+
+    return None
+
+
+def _extract_candidate_code_from_artifact_payload(artifact_payload: Any) -> str | None:
+    """Extract candidate_code from validate-candidate artifact payloads."""
+    if isinstance(artifact_payload, dict):
+        return _extract_candidate_code(artifact_payload)
+    if isinstance(artifact_payload, str):
+        text = artifact_payload.strip()
+        if not text:
+            return None
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            if _looks_like_rust_candidate_code(text):
+                return text
+            return None
+        if isinstance(parsed, dict):
+            return _extract_candidate_code(parsed)
+        if _looks_like_rust_candidate_code(text):
+            return text
+        return None
+    return None
+
+
+def _validate_algo_bench_candidate_code(candidate_code: str) -> tuple[
+    list[CandidateValidationIssue],
+    list[CandidateValidationIssue],
+]:
+    errors: list[CandidateValidationIssue] = []
+    warnings: list[CandidateValidationIssue] = []
+    stripped = candidate_code.strip()
+    byte_len = len(candidate_code.encode("utf-8"))
+
+    if not stripped:
+        errors.append(
+            CandidateValidationIssue(
+                code="EMPTY_CANDIDATE_CODE",
+                message="candidate_code is empty",
+                path="artifact_payload.candidate_code",
+            )
+        )
+        return errors, warnings
+
+    if byte_len > 120_000:
+        errors.append(
+            CandidateValidationIssue(
+                code="CANDIDATE_TOO_LARGE",
+                message=f"candidate_code exceeds 120000 bytes ({byte_len} bytes)",
+                path="artifact_payload.candidate_code",
+                constraint="max_payload_bytes=120000",
+            )
+        )
+
+    if "AiController" not in candidate_code:
+        errors.append(
+            CandidateValidationIssue(
+                code="MISSING_AICONTROLLER_REFERENCE",
+                message="candidate_code must reference the AiController trait",
+                path="artifact_payload.candidate_code",
+            )
+        )
+    elif "impl AiController for" not in candidate_code:
+        warnings.append(
+            CandidateValidationIssue(
+                code="MISSING_DIRECT_IMPL_PATTERN",
+                message="candidate_code does not contain `impl AiController for` pattern",
+                path="artifact_payload.candidate_code",
+            )
+        )
+
+    struct_name = _detect_ai_struct_name(candidate_code)
+    if not struct_name:
+        warnings.append(
+            CandidateValidationIssue(
+                code="STRUCT_NAME_NOT_DETECTED",
+                message="no `pub struct <Name>` declaration detected in candidate_code",
+                path="artifact_payload.candidate_code",
+            )
+        )
+
+    return errors, warnings
+
+
+def _parse_overall_win_rate(output: str) -> tuple[float | None, int | None, int | None]:
+    match = re.search(
+        r"Overall:\s*(\d+)\s*wins\s*/\s*(\d+)\s*matches\s*\(([\d.]+)%\)",
+        output,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None, None, None
+    wins = int(match.group(1))
+    matches = int(match.group(2))
+    rate = float(match.group(3))
+    return rate, wins, matches
+
+
+def _parse_benchmark_metrics_json(output: str) -> dict[str, Any] | None:
+    marker = "BENCHMARK_METRICS_JSON:"
+    for line in output.splitlines():
+        if marker not in line:
+            continue
+        payload = line.split(marker, 1)[1].strip()
+        if not payload:
+            continue
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _detect_ai_struct_name(candidate_code: str) -> str | None:
+    match = re.search(r"\bpub\s+struct\s+([A-Za-z_][A-Za-z0-9_]*)\b", candidate_code)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _algo_bench_source_fingerprint() -> str:
+    global _ALGO_BENCH_SOURCE_FINGERPRINT
+    if _ALGO_BENCH_SOURCE_FINGERPRINT:
+        return _ALGO_BENCH_SOURCE_FINGERPRINT
+    hasher = hashlib.sha256()
+    for path in [ALGO_BENCH_BENCHMARK]:
+        if path.exists():
+            hasher.update(path.read_bytes())
+    if ALGO_BENCH_REFERENCE_ALGOS_DIR.exists():
+        for path in sorted(ALGO_BENCH_REFERENCE_ALGOS_DIR.glob("*.rs")):
+            hasher.update(path.read_bytes())
+    _ALGO_BENCH_SOURCE_FINGERPRINT = hasher.hexdigest()[:16]
+    return _ALGO_BENCH_SOURCE_FINGERPRINT
+
+
+def _algo_bench_build_key(candidate_code: str, ai_name: str) -> str:
+    material = f"{_algo_bench_source_fingerprint()}\n{ai_name}\n{candidate_code}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _prune_algo_bench_build_cache(state: "EngineBenchState") -> None:
+    now = time.time()
+    directories: list[Path] = []
+    if state.algo_bench_build_root.exists():
+        directories = [
+            p for p in state.algo_bench_build_root.iterdir() if p.is_dir() and not p.name.startswith("_")
+        ]
+
+    # Drop TTL-expired directories first.
+    for directory in list(directories):
+        try:
+            age = now - directory.stat().st_mtime
+        except OSError:
+            continue
+        if age <= state.algo_bench_build_ttl_seconds:
+            continue
+        key = directory.name
+        lock = state.algo_bench_build_locks.get(key)
+        if lock is not None and lock.locked():
+            continue
+        shutil.rmtree(directory, ignore_errors=True)
+        directories.remove(directory)
+        state.algo_bench_build_cache.pop(key, None)
+
+    # Enforce max entries by mtime.
+    directories.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0.0, reverse=True)
+    for directory in directories[state.algo_bench_build_max_entries :]:
+        key = directory.name
+        lock = state.algo_bench_build_locks.get(key)
+        if lock is not None and lock.locked():
+            continue
+        shutil.rmtree(directory, ignore_errors=True)
+        state.algo_bench_build_cache.pop(key, None)
+
+
+async def ensure_algo_bench_binary(
+    state: "EngineBenchState",
+    *,
+    candidate_code: str,
+    ai_name: str,
+    build_timeout_seconds: int,
+) -> dict[str, Any]:
+    """Compile once per candidate and return reusable benchmark binary metadata."""
+    build_key = _algo_bench_build_key(candidate_code, ai_name)
+    async with state.algo_bench_build_cache_lock:
+        cached = state.algo_bench_build_cache.get(build_key)
+        if cached and Path(cached["binary_path"]).exists():
+            return {
+                "success": True,
+                "build_cache_hit": True,
+                "build_key": build_key,
+                "binary_path": cached["binary_path"],
+                "workspace_dir": cached["workspace_dir"],
+                "duration_seconds": 0.0,
+            }
+        lock = state.algo_bench_build_locks.get(build_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            state.algo_bench_build_locks[build_key] = lock
+
+    async with lock:
+        async with state.algo_bench_build_cache_lock:
+            cached = state.algo_bench_build_cache.get(build_key)
+            if cached and Path(cached["binary_path"]).exists():
+                return {
+                    "success": True,
+                    "build_cache_hit": True,
+                    "build_key": build_key,
+                    "binary_path": cached["binary_path"],
+                    "workspace_dir": cached["workspace_dir"],
+                    "duration_seconds": 0.0,
+                }
+
+        workspace_dir = state.algo_bench_build_root / build_key
+        binary_path = workspace_dir / "benchmark_bin"
+        if workspace_dir.exists() and binary_path.exists():
+            async with state.algo_bench_build_cache_lock:
+                state.algo_bench_build_cache[build_key] = {
+                    "binary_path": str(binary_path),
+                    "workspace_dir": str(workspace_dir),
+                    "updated_at": time.time(),
+                }
+            return {
+                "success": True,
+                "build_cache_hit": True,
+                "build_key": build_key,
+                "binary_path": str(binary_path),
+                "workspace_dir": str(workspace_dir),
+                "duration_seconds": 0.0,
+            }
+
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        candidate_path = workspace_dir / "candidate_ai.rs"
+        candidate_path.write_text(candidate_code, encoding="utf-8")
+        shared_binary_path = state.algo_bench_cargo_target_dir / "release" / "benchmark"
+        build_env = os.environ.copy()
+        build_env["CARGO_TARGET_DIR"] = str(state.algo_bench_cargo_target_dir)
+
+        start_time = time.time()
+        proc = await asyncio.create_subprocess_exec(
+            "python3",
+            str(ALGO_BENCH_BENCHMARK),
+            "--mode",
+            "build",
+            "--ai-code-file",
+            str(candidate_path),
+            "--name",
+            ai_name,
+            "--work-dir",
+            str(workspace_dir),
+            "--overzealous-dir",
+            str(OVERZEALOUS_REPO),
+            cwd=str(ALGO_BENCH_DIR),
+            env=build_env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        timed_out = False
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=max(1, int(build_timeout_seconds)),
+            )
+        except asyncio.TimeoutError:
+            timed_out = True
+            proc.kill()
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
+            except asyncio.TimeoutError:
+                stdout_bytes, stderr_bytes = b"", b""
+
+        duration = time.time() - start_time
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+        returncode = int(proc.returncode if proc.returncode is not None else -9)
+
+        if timed_out or returncode != 0 or not shared_binary_path.exists():
+            return {
+                "success": False,
+                "build_cache_hit": False,
+                "build_key": build_key,
+                "binary_path": str(binary_path),
+                "workspace_dir": str(workspace_dir),
+                "duration_seconds": duration,
+                "returncode": returncode,
+                "timed_out": timed_out,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+
+        try:
+            shutil.copy2(shared_binary_path, binary_path)
+        except Exception as exc:
+            return {
+                "success": False,
+                "build_cache_hit": False,
+                "build_key": build_key,
+                "binary_path": str(binary_path),
+                "workspace_dir": str(workspace_dir),
+                "duration_seconds": duration,
+                "returncode": 2,
+                "timed_out": False,
+                "stdout": stdout,
+                "stderr": f"{stderr}\nfailed to snapshot shared benchmark binary: {exc}",
+            }
+
+        async with state.algo_bench_build_cache_lock:
+            state.algo_bench_build_cache[build_key] = {
+                "binary_path": str(binary_path),
+                "workspace_dir": str(workspace_dir),
+                "updated_at": time.time(),
+            }
+            _prune_algo_bench_build_cache(state)
+        return {
+            "success": True,
+            "build_cache_hit": False,
+            "build_key": build_key,
+            "binary_path": str(binary_path),
+            "workspace_dir": str(workspace_dir),
+            "duration_seconds": duration,
+        }
+
+
+async def run_algo_bench_candidate_eval(
+    binary_path: str,
+    *,
+    workspace_dir: str,
+    matches: int,
+    seed_base: int,
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    """Evaluate a prebuilt candidate benchmark binary against v1-v4 and return reward."""
+    proc = await asyncio.create_subprocess_exec(
+        binary_path,
+        str(ALGO_BENCH_SERVER_DB),
+        str(ALGO_BENCH_CARDS_DB),
+        str(matches),
+        str(seed_base),
+        cwd=workspace_dir,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    timed_out = False
+    try:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=max(1, int(timeout_seconds)),
+        )
+    except asyncio.TimeoutError:
+        timed_out = True
+        proc.kill()
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            stdout_bytes, stderr_bytes = b"", b""
+    stdout = stdout_bytes.decode("utf-8", errors="replace")
+    stderr = stderr_bytes.decode("utf-8", errors="replace")
+    combined = f"{stdout}\n{stderr}"
+    win_rate, wins, total = _parse_overall_win_rate(combined)
+    benchmark_metrics = _parse_benchmark_metrics_json(combined)
+
+    reward = 0.0
+    returncode = int(proc.returncode if proc.returncode is not None else -9)
+    if not timed_out and returncode == 0 and win_rate is not None:
+        reward = max(0.0, min(1.0, win_rate / 100.0))
+
+    return {
+        "returncode": returncode,
+        "reward": reward,
+        "overall_win_rate": win_rate,
+        "wins": wins,
+        "matches": total,
+        "benchmark_metrics": benchmark_metrics,
+        "timed_out": timed_out,
+        "timeout_seconds": int(timeout_seconds),
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +600,31 @@ class EngineBenchState:
     openai_api_key: str | None = None
     max_concurrent_rollouts: int = 1
     rollout_semaphore: asyncio.Semaphore = field(init=False, repr=False)
+    algo_bench_cache: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    algo_bench_cache_lock: asyncio.Lock = field(init=False, repr=False)
+    algo_bench_build_root: Path = ALGO_BENCH_BUILD_CACHE_DIR
+    algo_bench_cargo_target_dir: Path = ALGO_BENCH_SHARED_TARGET_DIR
+    algo_bench_build_cache: dict[str, dict[str, Any]] = field(default_factory=dict, repr=False)
+    algo_bench_build_cache_lock: asyncio.Lock = field(init=False, repr=False)
+    algo_bench_build_locks: dict[str, asyncio.Lock] = field(default_factory=dict, repr=False)
+    algo_bench_build_max_entries: int = field(
+        default_factory=lambda: max(1, int(os.getenv("ALGO_BENCH_BUILD_MAX_ENTRIES", "32")))
+    )
+    algo_bench_build_ttl_seconds: int = field(
+        default_factory=lambda: max(300, int(os.getenv("ALGO_BENCH_BUILD_TTL_SECONDS", "86400")))
+    )
+    algo_bench_build_timeout_seconds: int = field(
+        default_factory=lambda: max(
+            60, int(os.getenv("ALGO_BENCH_BUILD_TIMEOUT_SECONDS", "900"))
+        )
+    )
 
     def __post_init__(self) -> None:
         self.rollout_semaphore = asyncio.Semaphore(max(1, self.max_concurrent_rollouts))
+        self.algo_bench_cache_lock = asyncio.Lock()
+        self.algo_bench_build_cache_lock = asyncio.Lock()
+        self.algo_bench_build_root.mkdir(parents=True, exist_ok=True)
+        self.algo_bench_cargo_target_dir.mkdir(parents=True, exist_ok=True)
 
     def pick_instance_id(self, seed: int) -> str:
         if not self.instance_ids:
@@ -228,7 +725,7 @@ async def setup_sandbox(instance_id: str, work_dir: Path) -> Path:
                     if f"pub mod {expansion};" not in lib_content:
                         lib_path.write_text(lib_content + f"\npub mod {expansion};\n")
     else:
-        # Fallback: Stub out DF implementation (legacy behavior)
+        # Strict: Stub out DF implementation (canonical behavior)
         df_dir = sandbox_dir / "tcg_expansions" / "src" / "dragon_frontiers"
         if df_dir.exists():
             cards_to_stub = instance.get("cards", [])
@@ -968,6 +1465,98 @@ def create_container(
 
         return base_info
 
+    @app.post("/upload_context")
+    async def upload_context(
+        payload: dict[str, Any] = Body(default_factory=dict),
+        x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER),
+    ) -> dict[str, Any]:
+        """Accept actionable upfront context uploads from GEPA/MIPRO runtimes.
+
+        EngineBench evaluates against its checked-out repo and does not require an
+        explicit ingestion step, but returning 200 here allows fail-closed context
+        upload flows to proceed.
+        """
+        if required_api_key and x_api_key != required_api_key:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        return {
+            "status": "accepted",
+            "ingested": False,
+            "mode": "no_op",
+            "reason": "engine_bench task app reads context from local workspace",
+            "payload_keys": sorted(payload.keys()),
+            "mount_path": payload.get("mount_path"),
+            "source_uri": payload.get("source_uri"),
+        }
+
+    @app.post("/validate-candidate", response_model=ValidateCandidateResponse)
+    async def validate_candidate(
+        request: ValidateCandidateRequest,
+        x_api_key: str | None = Header(default=None, alias=API_KEY_HEADER),
+    ) -> ValidateCandidateResponse:
+        """Validate optimize-anything program_code artifacts before rollout."""
+        if required_api_key and x_api_key != required_api_key:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        if _normalize_mode_token(request.optimization_mode) != "optimize_anything":
+            return ValidateCandidateResponse(
+                status="valid",
+                warnings=[
+                    CandidateValidationIssue(
+                        code="UNEXPECTED_OPTIMIZATION_MODE",
+                        message=(
+                            "engine_bench validate-candidate only enforces "
+                            "optimize_anything constraints"
+                        ),
+                        path="optimization_mode",
+                    )
+                ],
+                validation_digest=None,
+                validator_version="engine_bench_algo_v1",
+            )
+
+        artifact_kind = str(request.artifact_kind or "").strip().lower()
+        candidate_code = _extract_candidate_code_from_artifact_payload(request.artifact_payload)
+        errors: list[CandidateValidationIssue] = []
+        warnings: list[CandidateValidationIssue] = []
+
+        if artifact_kind and artifact_kind != "program_code":
+            errors.append(
+                CandidateValidationIssue(
+                    code="UNSUPPORTED_ARTIFACT_KIND",
+                    message=f"artifact_kind must be program_code for algo_bench (got {artifact_kind})",
+                    path="artifact_kind",
+                    constraint="program_code",
+                )
+            )
+
+        if not candidate_code:
+            errors.append(
+                CandidateValidationIssue(
+                    code="MISSING_CANDIDATE_CODE",
+                    message="artifact payload does not include non-empty candidate_code",
+                    path="artifact_payload",
+                )
+            )
+        else:
+            code_errors, code_warnings = _validate_algo_bench_candidate_code(candidate_code)
+            errors.extend(code_errors)
+            warnings.extend(code_warnings)
+
+        status = "invalid" if errors else "valid"
+        normalized_preview = (candidate_code or "")[:1000] or None
+        validation_digest = (
+            hashlib.sha256(candidate_code.encode("utf-8")).hexdigest() if candidate_code else None
+        )
+        return ValidateCandidateResponse(
+            status=status,
+            errors=errors,
+            warnings=warnings,
+            normalized_preview=normalized_preview,
+            validation_digest=validation_digest,
+            validator_version="engine_bench_algo_v1",
+        )
+
     @app.post("/rollout", response_model=RolloutResponse)
     async def rollout(
         request: RolloutRequest,
@@ -989,20 +1578,211 @@ def create_container(
         policy_config = request.policy.config or {}
 
         instance_id = env_config.get("instance_id") or state.pick_instance_id(seed)
-        model = policy_config.get("model", state.default_model)
-        timeout = int(policy_config.get("timeout", state.default_timeout))
-        loop_limit = int(policy_config.get("loop_limit", state.default_loop_limit))
-        api_key = policy_config.get("api_key") or state.openai_api_key
+        model = _policy_value(policy_config, "model") or state.default_model
+        timeout = int(_policy_value(policy_config, "timeout") or state.default_timeout)
+        loop_limit = int(_policy_value(policy_config, "loop_limit") or state.default_loop_limit)
         trace_correlation_id = (
             request.trace_correlation_id
-            or policy_config.get("trace_correlation_id")
-            or _extract_trace_correlation_id_from_url(policy_config.get("inference_url"))
-            or _extract_trace_correlation_id_from_url(policy_config.get("base_url"))
+            or _policy_value(policy_config, "trace_correlation_id")
+            or _extract_trace_correlation_id_from_url(_policy_value(policy_config, "inference_url"))
+            or _extract_trace_correlation_id_from_url(_policy_value(policy_config, "base_url"))
             or f"trace_{secrets.token_hex(12)}"
         )
         # If prompt-learning provides an interceptor URL, use it as the OpenAI base URL.
         # This enables upstream trace hydration and consistent correlation IDs.
-        inference_url = policy_config.get("inference_url") or policy_config.get("base_url")
+        inference_url = _policy_value(policy_config, "inference_url") or _policy_value(
+            policy_config, "base_url"
+        )
+        api_key = _policy_value(policy_config, "api_key") or state.openai_api_key
+        optimization_mode = _normalize_mode_token(_policy_value(policy_config, "optimization_mode"))
+
+        # Optimize-anything path for algo_bench program_code candidates. In this mode,
+        # rollout reward comes from benchmark win rate of candidate_code vs v1-v4 and
+        # does not require agent API keys.
+        if optimization_mode == "optimize_anything":
+            candidate_code = _extract_candidate_code(policy_config)
+            if not candidate_code:
+                return _error_response(
+                    request.run_id,
+                    seed,
+                    instance_id,
+                    "Missing candidate_code in optimize_anything policy config",
+                    trace_correlation_id=trace_correlation_id,
+                    inference_url=inference_url if isinstance(inference_url, str) else None,
+                )
+
+            matches = env_config.get("algo_bench_matches") or _policy_value(
+                policy_config, "algo_bench_matches"
+            )
+            try:
+                matches_i = int(matches) if matches is not None else 4
+            except (TypeError, ValueError):
+                matches_i = 4
+            max_matches_raw = os.getenv("ALGO_BENCH_MAX_MATCHES", "2000")
+            try:
+                max_matches_i = int(max_matches_raw)
+            except (TypeError, ValueError):
+                max_matches_i = 2000
+            max_matches_i = max(1, max_matches_i)
+            matches_i = max(1, min(matches_i, max_matches_i))
+            timeout_raw = (
+                env_config.get("algo_bench_timeout_seconds")
+                or _policy_value(policy_config, "algo_bench_timeout_seconds")
+            )
+            try:
+                timeout_i = int(timeout_raw) if timeout_raw is not None else 180
+            except (TypeError, ValueError):
+                timeout_i = 180
+            timeout_i = max(5, min(timeout_i, 1800))
+            configured_ai_name = (
+                str(_policy_value(policy_config, "ai_name")).strip()
+                if isinstance(_policy_value(policy_config, "ai_name"), str)
+                else ""
+            )
+            detected_ai_name = _detect_ai_struct_name(candidate_code) or ""
+            ai_name = configured_ai_name or detected_ai_name or "CandidateAi"
+            # Keep seed mapping dense so downstream pair-index modulo logic
+            # can cover all deck-pair combinations instead of sparse residues.
+            seed_base = max(0, int(seed))
+            build_timeout_raw = (
+                env_config.get("algo_bench_build_timeout_seconds")
+                or _policy_value(policy_config, "algo_bench_build_timeout_seconds")
+            )
+            try:
+                build_timeout_i = (
+                    int(build_timeout_raw)
+                    if build_timeout_raw is not None
+                    else int(state.algo_bench_build_timeout_seconds)
+                )
+            except (TypeError, ValueError):
+                build_timeout_i = int(state.algo_bench_build_timeout_seconds)
+            build_timeout_i = max(60, min(build_timeout_i, 3600))
+            cache_key_material = (
+                f"{_algo_bench_source_fingerprint()}\n{ai_name}\n{matches_i}\n{seed_base}\n{timeout_i}\n{candidate_code}"
+            )
+            cache_key = hashlib.sha256(cache_key_material.encode("utf-8")).hexdigest()
+
+            async with state.algo_bench_cache_lock:
+                cached_eval = state.algo_bench_cache.get(cache_key)
+
+            if cached_eval is not None:
+                eval_result = dict(cached_eval)
+                duration = 0.0
+                cache_hit = True
+                build_cache_hit = bool(eval_result.get("build_cache_hit"))
+                build_key_short = eval_result.get("build_key_short")
+                build_duration = float(eval_result.get("build_duration_seconds") or 0.0)
+            else:
+                start_time = time.time()
+                async with state.rollout_semaphore:
+                    build_result = await ensure_algo_bench_binary(
+                        state,
+                        candidate_code=candidate_code,
+                        ai_name=ai_name,
+                        build_timeout_seconds=build_timeout_i,
+                    )
+                    build_cache_hit = bool(build_result.get("build_cache_hit"))
+                    build_key_short = str(build_result.get("build_key") or "")[:12]
+                    build_duration = float(build_result.get("duration_seconds") or 0.0)
+
+                    if build_result.get("success"):
+                        eval_result = await run_algo_bench_candidate_eval(
+                            str(build_result["binary_path"]),
+                            workspace_dir=str(build_result["workspace_dir"]),
+                            matches=matches_i,
+                            seed_base=seed_base,
+                            timeout_seconds=timeout_i,
+                        )
+                    else:
+                        eval_result = {
+                            "returncode": int(build_result.get("returncode") or 1),
+                            "reward": 0.0,
+                            "overall_win_rate": None,
+                            "wins": None,
+                            "matches": None,
+                            "timed_out": bool(build_result.get("timed_out")),
+                            "timeout_seconds": int(build_timeout_i),
+                            "stdout": build_result.get("stdout") or "",
+                            "stderr": build_result.get("stderr") or "",
+                            "stage": "build",
+                        }
+                    eval_result["build_cache_hit"] = build_cache_hit
+                    eval_result["build_key_short"] = build_key_short
+                    eval_result["build_duration_seconds"] = build_duration
+                duration = time.time() - start_time
+                cache_hit = False
+                async with state.algo_bench_cache_lock:
+                    state.algo_bench_cache[cache_key] = dict(eval_result)
+
+            details = {
+                "optimization_mode": "optimize_anything",
+                "artifact_kind": policy_config.get("artifact_kind"),
+                "algo_bench_matches": matches_i,
+                "algo_bench_seed_base": seed_base,
+                "algo_bench_timeout_seconds": timeout_i,
+                "algo_bench_build_timeout_seconds": build_timeout_i,
+                "cache_hit": cache_hit,
+                "cache_key": cache_key[:12],
+                "build_cache_hit": build_cache_hit,
+                "build_key": build_key_short,
+                "build_duration_seconds": build_duration,
+                "benchmark_returncode": eval_result.get("returncode"),
+                "timed_out": bool(eval_result.get("timed_out")),
+                "benchmark_stage": eval_result.get("stage") or "run",
+                "overall_win_rate": eval_result.get("overall_win_rate"),
+                "wins": eval_result.get("wins"),
+                "matches": eval_result.get("matches"),
+                "benchmark_metrics": eval_result.get("benchmark_metrics"),
+                "seed": seed,
+                "instance_id": instance_id,
+                "duration_seconds": duration,
+                "stdout": (eval_result.get("stdout") or "")[:5000],
+                "stderr": (eval_result.get("stderr") or "")[:5000],
+            }
+
+            trace_payload = {
+                "schema_version": "3.0",
+                "event_history": [
+                    {
+                        "type": "task",
+                        "observation": f"Algo-bench optimize_anything rollout seed={seed}",
+                        "metadata": {
+                            "environment": "algo_bench",
+                            "seed": seed,
+                            "cache_hit": cache_hit,
+                            "trace_correlation_id": trace_correlation_id,
+                            "inference_url": inference_url,
+                        },
+                    },
+                    {
+                        "type": "evaluation",
+                        "observation": (
+                            f"reward={eval_result.get('reward', 0.0):.4f} "
+                            f"overall_win_rate={eval_result.get('overall_win_rate')} "
+                            f"wins={eval_result.get('wins')}/{eval_result.get('matches')}"
+                        ),
+                        "metadata": details,
+                    },
+                ],
+                "metadata": {
+                    "optimization_mode": "optimize_anything",
+                    "artifact_kind": policy_config.get("artifact_kind"),
+                    "seed": seed,
+                    "trace_correlation_id": trace_correlation_id,
+                    "inference_url": inference_url,
+                },
+            }
+
+            return RolloutResponse(
+                trace_correlation_id=trace_correlation_id,
+                reward_info=RolloutMetrics(
+                    outcome_reward=float(eval_result.get("reward", 0.0)),
+                    event_rewards=[float(eval_result.get("reward", 0.0))],
+                    details=details,
+                ),
+                inference_url=inference_url if isinstance(inference_url, str) else None,
+                trace=trace_payload,
+            )
 
         if not api_key:
             return _error_response(
@@ -1029,7 +1809,9 @@ def create_container(
 
                     # 3. Build prompt and run agent in container
                     prompt = _build_prompt(instance, loop_limit)
-                    base_url = policy_config.get("base_url") or policy_config.get("inference_url")
+                    base_url = _policy_value(policy_config, "base_url") or _policy_value(
+                        policy_config, "inference_url"
+                    )
                     # Echo back the effective inference URL used by the agent for trace hydration.
                     effective_inference_url = (
                         base_url

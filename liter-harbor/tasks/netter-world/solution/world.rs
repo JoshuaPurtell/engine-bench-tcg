@@ -224,13 +224,13 @@ fn generate_level(depth: usize, rng: &mut DeterministicRng, config: &GameConfig)
     }
 
     if rooms.is_empty() {
-        let fallback_w = config.room_min_size.max(3);
-        let fallback_h = config.room_min_size.max(3);
-        let x = (config.width - fallback_w) / 2;
-        let y = (config.height - fallback_h) / 2;
-        let fallback = Rect::new(x, y, fallback_w, fallback_h);
-        carve_room(&mut level, &fallback);
-        rooms.push(fallback);
+        let strict_w = config.room_min_size.max(3);
+        let strict_h = config.room_min_size.max(3);
+        let x = (config.width - strict_w) / 2;
+        let y = (config.height - strict_h) / 2;
+        let strict = Rect::new(x, y, strict_w, strict_h);
+        carve_room(&mut level, &strict);
+        rooms.push(strict);
     }
 
     place_doors(&mut level, rng);

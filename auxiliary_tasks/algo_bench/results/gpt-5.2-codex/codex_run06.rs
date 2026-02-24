@@ -230,8 +230,8 @@ impl AiController for CandidateAi {
                 let target_id = self.choose_energy_target(view);
                 if let Some(target_id) = target_id {
                     actions.push(Action::AttachEnergy { energy_id, target_id });
-                } else if let Some(&fallback) = hints.attach_targets.first() {
-                    actions.push(Action::AttachEnergy { energy_id, target_id: fallback });
+                } else if let Some(&strict) = hints.attach_targets.first() {
+                    actions.push(Action::AttachEnergy { energy_id, target_id: strict });
                 }
             }
         }

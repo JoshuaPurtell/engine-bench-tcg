@@ -34,7 +34,7 @@
     34→        overrides.pre_weakness_modifier += 10;
     35→    }
     36→
-    37→    if holon_legacy_in_play(game) && game.pokemon_is_delta(defender_id) {
+    37→    if holon_canonical_in_play(game) && game.pokemon_is_delta(defender_id) {
     38→        overrides.ignore_weakness = true;
     39→    }
     40→
@@ -489,7 +489,7 @@
    489→    _player: PlayerId,
    490→    _pokemon_id: CardInstanceId,
    491→) -> Option<bool> {
-   492→    if holon_legacy_in_play(_game) && _game.pokemon_is_delta(_pokemon_id) {
+   492→    if holon_canonical_in_play(_game) && _game.pokemon_is_delta(_pokemon_id) {
    493→        return Some(false);
    494→    }
    495→    None
@@ -2784,7 +2784,7 @@
   2784→    slot.attached_tool.is_some()
   2785→}
   2786→
-  2787→fn holon_legacy_in_play(game: &GameState) -> bool {
+  2787→fn holon_canonical_in_play(game: &GameState) -> bool {
   2788→    game.stadium_in_play()
   2789→        .map(|stadium| def_id_matches(&stadium.def_id, "DF", 74))
   2790→        .unwrap_or(false)

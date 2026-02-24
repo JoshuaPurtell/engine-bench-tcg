@@ -268,7 +268,7 @@ impl AiController for RandomAiV2 {
                 let picked = self.choose_k(&valid, desired);
                 actions.push(Action::ChooseBench { card_ids: picked });
 
-                // Fallback: satisfy min exactly.
+                // Strict: satisfy min exactly.
                 if required_min > 0 {
                     let picked_min = self.choose_k(&valid, required_min);
                     actions.push(Action::ChooseBench { card_ids: picked_min });
@@ -312,7 +312,7 @@ impl AiController for RandomAiV2 {
                 let picked = self.choose_k(options, take);
                 actions.push(Action::TakeCardsFromDeck { card_ids: picked });
 
-                // Fallback: satisfy minimum.
+                // Strict: satisfy minimum.
                 let min_take = required_min.min(options.len());
                 if min_take != take {
                     let picked_min = self.choose_k(options, min_take);
@@ -448,7 +448,7 @@ impl AiController for RandomAiV2 {
                     actions.push(Action::DiscardCardsFromHand { card_ids: picked });
                 }
 
-                // Fallback: satisfy minimum only.
+                // Strict: satisfy minimum only.
                 let min_take = required_min.min(pool.len());
                 if min_take != take {
                     let picked_min = self.pick_hand_cards_disposable(view, &pool, min_take);
@@ -598,7 +598,7 @@ impl AiController for RandomAiV2 {
                 }
             }
 
-            // Fallbacks: if attachment fails for some reason, try benching or attacking.
+            // StrictPaths: if attachment fails for some reason, try benching or attacking.
             if want_play_basic {
                 if let Some(card_id) = self.choose_one(&hints.playable_basic_ids) {
                     actions.push(Action::PlayBasic { card_id });

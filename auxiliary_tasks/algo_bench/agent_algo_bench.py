@@ -10,6 +10,7 @@ import argparse
 import concurrent.futures
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -42,7 +43,7 @@ use tcg_ai::traits::AiController;
 /// - view.opponent_active: Opponent's active Pokemon
 /// - view.opponent_bench: Opponent's bench
 /// - view.action_hints: Available actions (playable_basic_ids, playable_energy_ids, 
-///   attach_targets, usable_attacks, can_declare_attack, can_retreat, etc.)
+///   attach_targets, usable_attacks, can_declare_attack, etc.)
 /// - view.my_hand: Cards in your hand
 /// - view.my_prizes_count / view.opponent_prizes_count: Prize counts remaining
 /// - view.current_player / view.player_id: Turn tracking
@@ -100,7 +101,7 @@ impl AiController for {ai_name} {{
                 if let Some(best) = Self::best_attack(attacks) {{
                     actions.push(Action::DeclareAttack {{ attack: best }});
                 }}
-                // Fallback: try all attacks
+                // Strict: try all attacks
                 for attack in attacks {{
                     actions.push(Action::DeclareAttack {{ attack: attack.clone() }});
                 }}
@@ -120,7 +121,7 @@ impl AiController for {ai_name} {{
                 }}
             }}
             _ => {{
-                // Handle other prompts with EndTurn fallback
+                // Handle other prompts with EndTurn strict
             }}
         }}
 
@@ -177,6 +178,10 @@ Rules for a clean submission:
 - End file with the final `}}` only (no trailing `}};`)
 - Use only valid Rust code
 - Use `PokemonView` (not `PokemonInPlay`)
+- ActionHints does NOT have `can_retreat`; do not reference it
+- Allowed ActionHints fields: `playable_basic_ids`, `playable_energy_ids`,
+  `playable_trainer_ids`, `attach_targets`, `can_declare_attack`, `usable_attacks`,
+  `retreat_targets`, `can_end_turn`, `can_use_ability`
 
 Starter template:
 {algorithm_template}
@@ -197,6 +202,7 @@ Sanitized submission rules:
 - No trailing `}};` (end with `}}` only)
 - No extra wrapper code
 - Use `PokemonView` (not `PokemonInPlay`)
+- ActionHints does NOT have `can_retreat`; do not reference it
 - If you cannot write the file, output ONLY the Rust code to stdout
 
 Template:
@@ -218,6 +224,7 @@ def run_harness(
         # Configure codex to use OpenAI API directly with the provided API key
         # Strip provider prefix if present (e.g., "openai/gpt-5-codex" -> "gpt-5-codex")
         codex_model = model.split("/")[-1] if "/" in model else model
+        codex_base_url = env.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
         cmd = [
             "codex",
             "exec",
@@ -227,7 +234,9 @@ def run_harness(
             "-c",
             "model_provider=openai",
             "-c",
-            'model_providers.openai.base_url="https://api.openai.com/v1"',
+            'model_providers.openai.name="OpenAI"',
+            "-c",
+            f'model_providers.openai.base_url="{codex_base_url}"',
             "-c",
             'model_providers.openai.env_key="OPENAI_API_KEY"',
             "-c",
@@ -517,7 +526,20 @@ def sanitize_submission(code: str) -> str:
         i -= 1
     if i >= 0 and lines[i].strip() == "};":
         lines = lines[:i] + lines[i + 1 :]
-    return "\n".join(lines)
+    cleaned = "\n".join(lines)
+
+    # Overzealous ActionHints does not expose `can_retreat`; replace common
+    # generated patterns to avoid compile failures.
+    cleaned = cleaned.replace("hints.can_retreat && ", "")
+    cleaned = re.sub(r"\bhints\.can_retreat\b", "false", cleaned)
+    return cleaned
+
+
+def _contains_missing_can_retreat_error(output: str) -> bool:
+    return (
+        "no field `can_retreat` on type `&ActionHints`" in output
+        or "no field `can_retreat` on type `ActionHints`" in output
+    )
 
 
 def run_instance(run_index: int, total_runs: int, args: argparse.Namespace, merged_env: dict[str, str]) -> dict[str, Any]:
@@ -660,6 +682,34 @@ def run_instance(run_index: int, total_runs: int, args: argparse.Namespace, merg
             run_results["benchmark"]["overall_win_rate"] = parse_overall_rate(bench_proc.stdout)
 
             if bench_proc.returncode != 0:
+                combined_output = f"{bench_proc.stdout}\n{bench_proc.stderr}"
+                if _contains_missing_can_retreat_error(combined_output) and "can_retreat" in ai_code:
+                    repaired_code = sanitize_submission(ai_code)
+                    if repaired_code != ai_code:
+                        submission_path.write_text(repaired_code)
+                        run_results["compile_repair"] = {
+                            "reason": "removed unsupported ActionHints.can_retreat usage",
+                            "attempted": True,
+                        }
+                        bench_proc_repair = subprocess.run(
+                            bench_cmd,
+                            cwd=str(BASE_DIR),
+                            capture_output=True,
+                            text=True,
+                        )
+                        run_results["benchmark"]["stdout"] = bench_proc_repair.stdout
+                        run_results["benchmark"]["stderr"] = bench_proc_repair.stderr
+                        run_results["benchmark"]["returncode"] = bench_proc_repair.returncode
+                        run_results["benchmark"]["overall_win_rate"] = parse_overall_rate(
+                            bench_proc_repair.stdout
+                        )
+                        run_results["submission_chars"] = len(repaired_code)
+                        run_results["submission"]["code"] = repaired_code
+                        bench_proc = bench_proc_repair
+                # Reward-zero semantics for invalid submissions:
+                # the candidate was submitted but failed to compile, so score it as 0.0.
+                if run_results["benchmark"].get("overall_win_rate") is None:
+                    run_results["benchmark"]["overall_win_rate"] = 0.0
                 run_results["error"] = "SubmissionFailedCompilation"
             run_results["success"] = bench_proc.returncode == 0
         else:
@@ -773,17 +823,17 @@ def main() -> None:
 
     results["runs"] = runs
 
-    success_runs = [run for run in runs if run.get("success")]
-
     def average(values: list[float]) -> Optional[float]:
         if not values:
             return None
         return sum(values) / len(values)
 
+    success_runs = [run for run in runs if run.get("success")]
+
     avg_win = average(
         [
             run["benchmark"]["overall_win_rate"]
-            for run in success_runs
+            for run in runs
             if run.get("benchmark", {}).get("overall_win_rate") is not None
         ]
     )

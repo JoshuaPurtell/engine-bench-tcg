@@ -107,7 +107,7 @@ impl AiController for RandomAi {
                 actions.push(Action::ChooseBench { card_ids: picked });
             }
             Prompt::ChooseAttack { attacks } => {
-                // Pick the best attack first; fallback to random order.
+                // Pick the best attack first; strict to random order.
                 if let Some(best) = Self::best_attack(attacks) {
                     actions.push(Action::DeclareAttack { attack: best });
                 }
@@ -267,7 +267,7 @@ impl AiController for RandomAi {
                 if *player != view.player_id {
                     return vec![Action::EndTurn];
                 }
-                // Prefer lexicographically "highest" name just to be deterministic-ish; then shuffle fallbacks.
+                // Prefer lexicographically "highest" name just to be deterministic-ish; then shuffle strict_paths.
                 if let Some(name) = attacks.iter().max().cloned() {
                     actions.push(Action::DeclareAttack {
                         attack: Attack {
@@ -325,7 +325,7 @@ impl AiController for RandomAi {
                     options.clone()
                 };
 
-                // Pick the first option deterministically, then shuffled fallbacks.
+                // Pick the first option deterministically, then shuffled strict_paths.
                 if let Some(card_id) = candidates.first().copied() {
                     actions.push(Action::ChooseNewActive { card_id });
                 }

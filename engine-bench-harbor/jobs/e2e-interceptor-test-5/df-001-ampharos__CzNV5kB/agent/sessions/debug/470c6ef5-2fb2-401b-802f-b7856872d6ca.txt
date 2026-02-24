@@ -48,7 +48,7 @@
 2026-02-01T00:34:12.286Z [DEBUG] [STARTUP] setup() completed in 11ms
 2026-02-01T00:34:12.286Z [DEBUG] [STARTUP] Loading commands and agents...
 2026-02-01T00:34:12.287Z [DEBUG] Total plugin agents loaded: 0
-2026-02-01T00:34:12.287Z [DEBUG] Loaded 0 unique skills (managed: 0, user: 0, project: 0, legacy commands: 0)
+2026-02-01T00:34:12.287Z [DEBUG] Loaded 0 unique skills (managed: 0, user: 0, project: 0, canonical commands: 0)
 2026-02-01T00:34:12.287Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 1 bundled skills
 2026-02-01T00:34:12.288Z [DEBUG] [STARTUP] Commands and agents loaded in 2ms
 2026-02-01T00:34:12.288Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called

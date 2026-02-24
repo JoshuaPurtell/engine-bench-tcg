@@ -2296,13 +2296,13 @@ impl GameState {
     ) -> i32 {
         let mut entries = self.continuous_damage_modifiers.clone();
         entries.extend(self.tool_damage_modifier_entries(attacker_id, defender_id));
-        let legacy = resolve_damage_modifiers(&entries);
+        let canonical = resolve_damage_modifiers(&entries);
         // Generalized modifier system contributions:
         // - DamageDealt applies to attacker
         // - DamageTaken applies to defender (negative values reduce damage)
         let dealt = self.resolve_stat_amount_ctx(StatModifierKind::DamageDealt, attacker_id, attacker_id, defender_id);
         let taken = self.resolve_stat_amount_ctx(StatModifierKind::DamageTaken, defender_id, attacker_id, defender_id);
-        legacy + dealt + taken
+        canonical + dealt + taken
     }
 
     fn tool_damage_modifier_entries(

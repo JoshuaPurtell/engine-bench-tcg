@@ -471,7 +471,7 @@ impl AiController for RandomAiV3 {
                 let picked = self.choose_k(&valid, desired);
                 actions.push(Action::ChooseBench { card_ids: picked });
 
-                // Fallback: satisfy min exactly.
+                // Strict: satisfy min exactly.
                 if required_min > 0 {
                     let picked_min = self.choose_k(&valid, required_min);
                     actions.push(Action::ChooseBench { card_ids: picked_min });
@@ -516,7 +516,7 @@ impl AiController for RandomAiV3 {
                 let picked = self.choose_k(options, take);
                 actions.push(Action::TakeCardsFromDeck { card_ids: picked });
 
-                // Fallback: satisfy minimum.
+                // Strict: satisfy minimum.
                 let min_take = required_min.min(options.len());
                 if min_take != take {
                     let picked_min = self.choose_k(options, min_take);
@@ -663,7 +663,7 @@ impl AiController for RandomAiV3 {
                     actions.push(Action::DiscardCardsFromHand { card_ids: picked });
                 }
 
-                // Fallback: satisfy minimum only.
+                // Strict: satisfy minimum only.
                 let min_take = required_min.min(pool.len());
                 if min_take != take {
                     let picked_min = self.pick_hand_cards_disposable(view, &pool, min_take);
@@ -801,7 +801,7 @@ impl AiController for RandomAiV3 {
         if can_evolve {
             if let Some(action) = self.choose_evolution_action(view) {
                 actions.push(action);
-                // Fallbacks
+                // StrictPaths
                 if can_play_trainer {
                     if let Some(action) = self.choose_trainer_action(view) {
                         actions.push(action);

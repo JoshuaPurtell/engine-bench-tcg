@@ -18,7 +18,7 @@ Edit the file `src_modular/modules/rng/mod.rs`. You MUST:
 Deterministic RNG (LCG) for worldgen and gameplay.
 
 ## Behavior
-- `new(seed)` uses fixed fallback seed if zero.
+- `new(seed)` uses fixed strict seed if zero.
 - `next_u64` advances state deterministically.
 
 
@@ -43,7 +43,7 @@ fn different_seeds_differ() {
 }
 
 #[test]
-fn zero_seed_uses_fallback() {
+fn zero_seed_uses_strict() {
     let mut rng = DeterministicRng::new(0);
     let v1 = rng.next_u64();
     let v2 = rng.next_u64();

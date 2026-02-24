@@ -1,0 +1,19 @@
+{
+  "name": "Kingdra Delta Depths",
+  "source": "engine-bench decklist-derived",
+  "cards": [
+    {"card_def_id": "DF-50", "count": 4},
+    {"card_def_id": "DF-22", "count": 3},
+    {"card_def_id": "DF-94", "count": 2},
+    {"card_def_id": "DF-67", "count": 3},
+    {"card_def_id": "DF-27", "count": 2},
+    {"card_def_id": "DF-2", "count": 2},
+    {"card_def_id": "DF-5", "count": 1},
+    {"card_def_id": "DF-82", "count": 4},
+    {"card_def_id": "DF-79", "count": 3},
+    {"card_def_id": "DF-72", "count": 2},
+    {"card_def_id": "DF-78", "count": 2},
+    {"card_def_id": "ENERGY-WATER", "count": 20},
+    {"card_def_id": "ENERGY-FIRE", "count": 12}
+  ]
+}

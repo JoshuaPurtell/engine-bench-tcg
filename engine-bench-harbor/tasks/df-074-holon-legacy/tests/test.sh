@@ -3,8 +3,8 @@ set -u
 
 LOG_DIR="/logs/verifier"
 WORKDIR="/app"
-CARD_PATH="$WORKDIR/src/df/cards/df_074_holon_legacy.rs"
-EVAL_TESTS="/tests/df_074_holon_legacy_eval.rs"
+CARD_PATH="$WORKDIR/src/df/cards/df_074_holon_canonical.rs"
+EVAL_TESTS="/tests/df_074_holon_canonical_eval.rs"
 
 mkdir -p "$LOG_DIR"
 
@@ -53,7 +53,7 @@ if [ $compile_status -eq 0 ]; then
   compile_ok=1
   echo ""
   echo "=== Running cargo test ==="
-  test_output=$(cargo test --package tcg_expansions -- --test-threads=1 df_074_holon_legacy 2>&1)
+  test_output=$(cargo test --package tcg_expansions -- --test-threads=1 df_074_holon_canonical 2>&1)
   test_exit_code=$?
   echo "$test_output"
   

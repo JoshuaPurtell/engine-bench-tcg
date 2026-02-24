@@ -1,0 +1,20 @@
+{
+  "name": "Gardevoir Delta Control",
+  "source": "engine-bench decklist-derived",
+  "cards": [
+    {"card_def_id": "DF-61", "count": 4},
+    {"card_def_id": "DF-33", "count": 3},
+    {"card_def_id": "DF-93", "count": 2},
+    {"card_def_id": "DF-17", "count": 2},
+    {"card_def_id": "DF-70", "count": 3},
+    {"card_def_id": "DF-8", "count": 2},
+    {"card_def_id": "DF-10", "count": 2},
+    {"card_def_id": "DF-82", "count": 4},
+    {"card_def_id": "DF-79", "count": 4},
+    {"card_def_id": "DF-72", "count": 2},
+    {"card_def_id": "DF-80", "count": 2},
+    {"card_def_id": "DF-75", "count": 2},
+    {"card_def_id": "ENERGY-PSYCHIC", "count": 16},
+    {"card_def_id": "ENERGY-FIRE", "count": 12}
+  ]
+}

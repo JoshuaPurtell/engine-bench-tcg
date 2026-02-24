@@ -34,7 +34,7 @@ pub fn attack_overrides(
         overrides.pre_weakness_modifier += 10;
     }
 
-    if holon_legacy_in_play(game) && game.pokemon_is_delta(defender_id) {
+    if holon_canonical_in_play(game) && game.pokemon_is_delta(defender_id) {
         overrides.ignore_weakness = true;
     }
 
@@ -489,7 +489,7 @@ pub fn can_use_pokepower_override(
     _player: PlayerId,
     _pokemon_id: CardInstanceId,
 ) -> Option<bool> {
-    if holon_legacy_in_play(_game) && _game.pokemon_is_delta(_pokemon_id) {
+    if holon_canonical_in_play(_game) && _game.pokemon_is_delta(_pokemon_id) {
         return Some(false);
     }
     None
@@ -2784,7 +2784,7 @@ fn has_any_tool(slot: &PokemonSlot) -> bool {
     slot.attached_tool.is_some()
 }
 
-fn holon_legacy_in_play(game: &GameState) -> bool {
+fn holon_canonical_in_play(game: &GameState) -> bool {
     game.stadium_in_play()
         .map(|stadium| def_id_matches(&stadium.def_id, "DF", 74))
         .unwrap_or(false)

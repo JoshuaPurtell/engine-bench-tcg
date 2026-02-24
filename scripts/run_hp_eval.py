@@ -196,7 +196,7 @@ def run_cargo_test(sandbox_dir: Path, instance_id: str, card_file_rel: str = "",
         # Strip prefix and .rs suffix to get module path
         module_path = card_file_rel.replace("tcg_expansions/src/", "").replace(".rs", "").replace("/", "::")
     else:
-        # Fallback: assume HP card structure
+        # Strict: assume HP card structure
         module_name = instance_id.replace("-", "_")
         module_path = f"hp::cards::{module_name}"
 

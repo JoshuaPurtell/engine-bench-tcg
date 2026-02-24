@@ -3,8 +3,8 @@ set -euo pipefail
 
 WORKDIR="/app"
 # Harbor mounts solution/ to /solution/ (not /oracle/)
-SOURCE="/solution/df_074_holon_legacy.rs"
-DEST="$WORKDIR/src/df/cards/df_074_holon_legacy.rs"
+SOURCE="/solution/df_074_holon_canonical.rs"
+DEST="$WORKDIR/src/df/cards/df_074_holon_canonical.rs"
 
 echo "=== Oracle solve.sh ==="
 echo "Applying gold solution from $SOURCE to $DEST"

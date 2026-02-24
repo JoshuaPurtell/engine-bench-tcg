@@ -7,7 +7,7 @@ use crate::ids::CardInstanceId;
 use crate::{Attack, CardDefId, GameState, PokemonSlot, Type};
 use crate::types::EnergyAttachmentSource;
 
-// Re-export AttackOverrides from runtime_hooks for backwards compatibility
+// Re-export AttackOverrides from runtime_hooks for compatibility removed
 pub use crate::runtime_hooks::AttackOverrides;
 
 pub fn apply_attack_overrides(
@@ -137,7 +137,7 @@ pub fn power_is_once_per_turn(def_id: &CardDefId, power_name: &str) -> bool {
     (crate::runtime_hooks::RuntimeHooks::default().power_is_once_per_turn)(def_id, power_name)
 }
 
-// Re-export def_id_matches from runtime_hooks for backwards compatibility
+// Re-export def_id_matches from runtime_hooks for compatibility removed
 pub use crate::runtime_hooks::def_id_matches;
 
 pub fn card_has_power_or_body(def_id: &CardDefId) -> bool {

@@ -8,4 +8,4 @@ COPY scaffold/ /app/
 
 # Overwrite the target card with the task stub.
 # Note: scaffold IS the tcg_expansions crate, so paths are /app/src/...
-COPY stubs/df_074_holon_legacy.rs /app/src/df/cards/df_074_holon_legacy.rs
+COPY stubs/df_074_holon_canonical.rs /app/src/df/cards/df_074_holon_canonical.rs

@@ -1,13 +1,13 @@
 {
-  "id": "df-074-holon-legacy",
-  "name": "Holon Legacy - Dragon Frontiers",
+  "id": "df-074-holon-canonical",
+  "name": "Holon Canonical - Dragon Frontiers",
   "mode": "single_card",
   "expansion": "dragon_frontiers",
-  "card_file": "tcg_expansions/src/df/cards/df_074_holon_legacy.rs",
+  "card_file": "tcg_expansions/src/df/cards/df_074_holon_canonical.rs",
   "cards": [
     {
       "id": "df-074",
-      "name": "Holon Legacy",
+      "name": "Holon Canonical",
       "set": "DF",
       "number": 74,
       "rarity": "uncommon",
